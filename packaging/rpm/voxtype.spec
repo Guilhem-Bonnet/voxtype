@@ -110,5 +110,5 @@ echo ""
 %{_datadir}/fish/vendor_completions.d/voxtype.fish
 
 %changelog
-* Wed Nov 27 2024 Pete <pete@example.com> - 0.1.0-1
+* Thu Nov 28 2025 Peter Jackson <pete@peteonrails.com> - 0.1.0-1
 - Initial release

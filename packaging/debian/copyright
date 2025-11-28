@@ -1,10 +1,10 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: voxtype
-Upstream-Contact: Pete <pete@example.com>
+Upstream-Contact: Peter Jackson <pete@peteonrails.com>
 Source: https://github.com/peteonrails/voxtype
 
 Files: *
-Copyright: 2024 Pete
+Copyright: 2025 Peter Jackson
 License: MIT
 
 License: MIT

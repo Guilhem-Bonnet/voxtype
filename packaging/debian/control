@@ -1,7 +1,7 @@
 Source: voxtype
 Section: sound
 Priority: optional
-Maintainer: Pete <pete@example.com>
+Maintainer: Peter Jackson <pete@peteonrails.com>
 Build-Depends: debhelper-compat (= 13),
                cargo,
                rustc,
