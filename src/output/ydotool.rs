@@ -17,12 +17,37 @@ use tokio::process::Command;
 pub struct YdotoolOutput {
     /// Delay between keypresses in milliseconds
     delay_ms: u32,
+    /// Whether to show a desktop notification
+    notify: bool,
 }
 
 impl YdotoolOutput {
     /// Create a new ydotool output
-    pub fn new(delay_ms: u32) -> Self {
-        Self { delay_ms }
+    pub fn new(delay_ms: u32, notify: bool) -> Self {
+        Self { delay_ms, notify }
+    }
+
+    /// Send a desktop notification
+    async fn send_notification(&self, text: &str) {
+        // Truncate preview for notification
+        let preview: String = text.chars().take(100).collect();
+        let preview = if text.len() > 100 {
+            format!("{}...", preview)
+        } else {
+            preview
+        };
+
+        let _ = Command::new("notify-send")
+            .args([
+                "--app-name=Voxtype",
+                "--expire-time=3000",
+                "Transcribed",
+                &preview,
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .await;
     }
 }
 
@@ -69,6 +94,11 @@ impl TextOutput for YdotoolOutput {
             return Err(OutputError::InjectionFailed(stderr.to_string()));
         }
 
+        // Send notification if enabled
+        if self.notify {
+            self.send_notification(text).await;
+        }
+
         Ok(())
     }
 
@@ -108,7 +138,8 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let output = YdotoolOutput::new(10);
+        let output = YdotoolOutput::new(10, true);
         assert_eq!(output.delay_ms, 10);
+        assert!(output.notify);
     }
 }

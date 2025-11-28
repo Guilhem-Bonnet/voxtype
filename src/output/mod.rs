@@ -28,19 +28,20 @@ pub fn create_output_chain(config: &OutputConfig) -> Vec<Box<dyn TextOutput>> {
     match config.mode {
         crate::config::OutputMode::Type => {
             // Primary: ydotool for typing
-            chain.push(Box::new(ydotool::YdotoolOutput::new(config.type_delay_ms)));
+            chain.push(Box::new(ydotool::YdotoolOutput::new(
+                config.type_delay_ms,
+                config.notification.on_transcription,
+            )));
 
-            // Fallback: clipboard
+            // Fallback: clipboard (no notification since primary already handles it)
             if config.fallback_to_clipboard {
-                chain.push(Box::new(clipboard::ClipboardOutput::new(
-                    config.notification,
-                )));
+                chain.push(Box::new(clipboard::ClipboardOutput::new(false)));
             }
         }
         crate::config::OutputMode::Clipboard => {
             // Only clipboard
             chain.push(Box::new(clipboard::ClipboardOutput::new(
-                config.notification,
+                config.notification.on_transcription,
             )));
         }
     }

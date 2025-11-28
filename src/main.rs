@@ -468,8 +468,21 @@ fn show_config(config: &config::Config) -> anyhow::Result<()> {
         "  fallback_to_clipboard = {}",
         config.output.fallback_to_clipboard
     );
-    println!("  notification = {}", config.output.notification);
     println!("  type_delay_ms = {}", config.output.type_delay_ms);
+
+    println!("\n[output.notification]");
+    println!(
+        "  on_recording_start = {}",
+        config.output.notification.on_recording_start
+    );
+    println!(
+        "  on_recording_stop = {}",
+        config.output.notification.on_recording_stop
+    );
+    println!(
+        "  on_transcription = {}",
+        config.output.notification.on_transcription
+    );
 
     println!("\n---");
     println!(

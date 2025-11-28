@@ -10,8 +10,25 @@ use crate::hotkey::{self, HotkeyEvent};
 use crate::output;
 use crate::state::State;
 use crate::transcribe;
+use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::process::Command;
+
+/// Send a desktop notification
+async fn send_notification(title: &str, body: &str) {
+    let _ = Command::new("notify-send")
+        .args([
+            "--app-name=Voxtype",
+            "--expire-time=2000",
+            title,
+            body,
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await;
+}
 
 /// Main daemon that orchestrates all components
 pub struct Daemon {
@@ -83,6 +100,11 @@ impl Daemon {
                             if state.is_idle() {
                                 tracing::info!("Recording started");
 
+                                // Send notification if enabled
+                                if self.config.output.notification.on_recording_start {
+                                    send_notification("Push to Talk Active", "Recording...").await;
+                                }
+
                                 // Create and start audio capture
                                 tracing::debug!("Creating audio capture with device: {}", self.config.audio.device);
                                 match audio::create_capture(&self.config.audio) {
@@ -110,6 +132,11 @@ impl Daemon {
                             if state.is_recording() {
                                 let duration = state.recording_duration().unwrap_or_default();
                                 tracing::info!("Recording stopped ({:.1}s)", duration.as_secs_f32());
+
+                                // Send notification if enabled
+                                if self.config.output.notification.on_recording_stop {
+                                    send_notification("Push to Talk Inactive", "Transcribing...").await;
+                                }
 
                                 // Stop recording and get samples
                                 tracing::debug!("audio_capture.is_some() = {}", audio_capture.is_some());

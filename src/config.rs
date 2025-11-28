@@ -63,6 +63,32 @@ pub struct WhisperConfig {
     pub threads: Option<usize>,
 }
 
+/// Notification configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct NotificationConfig {
+    /// Notify when recording starts (hotkey pressed)
+    #[serde(default)]
+    pub on_recording_start: bool,
+
+    /// Notify when recording stops (hotkey released, transcription starting)
+    #[serde(default)]
+    pub on_recording_stop: bool,
+
+    /// Notify with transcribed text after transcription completes
+    #[serde(default = "default_true")]
+    pub on_transcription: bool,
+}
+
+impl Default for NotificationConfig {
+    fn default() -> Self {
+        Self {
+            on_recording_start: false,
+            on_recording_stop: false,
+            on_transcription: true,
+        }
+    }
+}
+
 /// Text output configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OutputConfig {
@@ -73,9 +99,9 @@ pub struct OutputConfig {
     #[serde(default = "default_true")]
     pub fallback_to_clipboard: bool,
 
-    /// Show desktop notification with transcribed text
-    #[serde(default = "default_true")]
-    pub notification: bool,
+    /// Notification settings
+    #[serde(default)]
+    pub notification: NotificationConfig,
 
     /// Delay between typed characters (ms), 0 for fastest
     #[serde(default)]
@@ -117,7 +143,7 @@ impl Default for Config {
             output: OutputConfig {
                 mode: OutputMode::Type,
                 fallback_to_clipboard: true,
-                notification: true,
+                notification: NotificationConfig::default(),
                 type_delay_ms: 0,
             },
         }
@@ -256,7 +282,11 @@ mod tests {
             
             [output]
             mode = "clipboard"
-            notification = false
+
+            [output.notification]
+            on_recording_start = true
+            on_recording_stop = true
+            on_transcription = false
         "#;
 
         let config: Config = toml::from_str(toml_str).unwrap();
@@ -264,6 +294,8 @@ mod tests {
         assert_eq!(config.hotkey.modifiers, vec!["LEFTCTRL"]);
         assert_eq!(config.whisper.model, "small.en");
         assert_eq!(config.output.mode, OutputMode::Clipboard);
-        assert!(!config.output.notification);
+        assert!(config.output.notification.on_recording_start);
+        assert!(config.output.notification.on_recording_stop);
+        assert!(!config.output.notification.on_transcription);
     }
 }
