@@ -1,0 +1,227 @@
+//! Whisper-based speech-to-text transcription
+//!
+//! Uses whisper.cpp via the whisper-rs crate for fast, local transcription.
+
+use super::Transcriber;
+use crate::config::{Config, WhisperConfig};
+use crate::error::TranscribeError;
+use std::path::PathBuf;
+use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+
+/// Whisper-based transcriber
+pub struct WhisperTranscriber {
+    /// Whisper context (holds the model)
+    ctx: WhisperContext,
+    /// Language for transcription
+    language: String,
+    /// Whether to translate to English
+    translate: bool,
+    /// Number of threads to use
+    threads: usize,
+}
+
+impl WhisperTranscriber {
+    /// Create a new whisper transcriber
+    pub fn new(config: &WhisperConfig) -> Result<Self, TranscribeError> {
+        let model_path = resolve_model_path(&config.model)?;
+
+        tracing::info!("Loading whisper model from {:?}", model_path);
+        let start = std::time::Instant::now();
+
+        let ctx = WhisperContext::new_with_params(
+            model_path
+                .to_str()
+                .ok_or_else(|| TranscribeError::ModelNotFound("Invalid path".to_string()))?,
+            WhisperContextParameters::default(),
+        )
+        .map_err(|e| TranscribeError::InitFailed(e.to_string()))?;
+
+        tracing::info!("Model loaded in {:.2}s", start.elapsed().as_secs_f32());
+
+        let threads = config
+            .threads
+            .unwrap_or_else(|| num_cpus::get().min(4));
+
+        Ok(Self {
+            ctx,
+            language: config.language.clone(),
+            translate: config.translate,
+            threads,
+        })
+    }
+}
+
+impl Transcriber for WhisperTranscriber {
+    fn transcribe(&self, samples: &[f32]) -> Result<String, TranscribeError> {
+        if samples.is_empty() {
+            return Err(TranscribeError::AudioFormat("Empty audio buffer".to_string()));
+        }
+
+        let duration_secs = samples.len() as f32 / 16000.0;
+        tracing::debug!(
+            "Transcribing {:.2}s of audio ({} samples)",
+            duration_secs,
+            samples.len()
+        );
+
+        let start = std::time::Instant::now();
+
+        // Create state for this transcription
+        let mut state = self
+            .ctx
+            .create_state()
+            .map_err(|e| TranscribeError::InferenceFailed(e.to_string()))?;
+
+        // Configure parameters
+        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+
+        // Set language (handle "auto" for auto-detection)
+        if self.language != "auto" {
+            params.set_language(Some(&self.language));
+        }
+
+        params.set_translate(self.translate);
+        params.set_n_threads(self.threads as i32);
+
+        // Disable output we don't need
+        params.set_print_special(false);
+        params.set_print_progress(false);
+        params.set_print_realtime(false);
+        params.set_print_timestamps(false);
+
+        // Improve transcription quality
+        params.set_suppress_blank(true);
+        params.set_suppress_non_speech_tokens(true);
+
+        // For short recordings, use single segment mode
+        if duration_secs < 30.0 {
+            params.set_single_segment(true);
+        }
+
+        // Run inference
+        state
+            .full(params, samples)
+            .map_err(|e| TranscribeError::InferenceFailed(e.to_string()))?;
+
+        // Collect all segments
+        let num_segments = state
+            .full_n_segments()
+            .map_err(|e| TranscribeError::InferenceFailed(e.to_string()))?;
+
+        let mut text = String::new();
+        for i in 0..num_segments {
+            if let Ok(segment) = state.full_get_segment_text(i) {
+                text.push_str(&segment);
+            }
+        }
+
+        let result = text.trim().to_string();
+
+        tracing::info!(
+            "Transcription completed in {:.2}s: {:?}",
+            start.elapsed().as_secs_f32(),
+            if result.len() > 50 {
+                format!("{}...", &result[..50])
+            } else {
+                result.clone()
+            }
+        );
+
+        Ok(result)
+    }
+}
+
+/// Resolve model name to file path
+fn resolve_model_path(model: &str) -> Result<PathBuf, TranscribeError> {
+    // If it's already an absolute path, use it directly
+    let path = PathBuf::from(model);
+    if path.is_absolute() && path.exists() {
+        return Ok(path);
+    }
+
+    // Map model names to file names
+    let model_filename = match model {
+        "tiny" => "ggml-tiny.bin",
+        "tiny.en" => "ggml-tiny.en.bin",
+        "base" => "ggml-base.bin",
+        "base.en" => "ggml-base.en.bin",
+        "small" => "ggml-small.bin",
+        "small.en" => "ggml-small.en.bin",
+        "medium" => "ggml-medium.bin",
+        "medium.en" => "ggml-medium.en.bin",
+        "large" | "large-v1" => "ggml-large-v1.bin",
+        "large-v2" => "ggml-large-v2.bin",
+        "large-v3" => "ggml-large-v3.bin",
+        "large-v3-turbo" => "ggml-large-v3-turbo.bin",
+        // If it looks like a filename, use it as-is
+        other if other.ends_with(".bin") => other,
+        // Otherwise, assume it's a model name and add prefix/suffix
+        other => {
+            return Err(TranscribeError::ModelNotFound(format!(
+                "Unknown model: '{}'. Valid models: tiny, base, small, medium, large-v3",
+                other
+            )));
+        }
+    };
+
+    // Look in the data directory
+    let models_dir = Config::models_dir();
+    let model_path = models_dir.join(model_filename);
+
+    if model_path.exists() {
+        return Ok(model_path);
+    }
+
+    // Also check current directory
+    let cwd_path = PathBuf::from(model_filename);
+    if cwd_path.exists() {
+        return Ok(cwd_path);
+    }
+
+    // Also check ./models/
+    let local_models_path = PathBuf::from("models").join(model_filename);
+    if local_models_path.exists() {
+        return Ok(local_models_path);
+    }
+
+    Err(TranscribeError::ModelNotFound(format!(
+        "Model '{}' not found. Looked in:\n  - {}\n  - {}\n  - {}\n\nDownload from: https://huggingface.co/ggerganov/whisper.cpp/tree/main",
+        model,
+        model_path.display(),
+        cwd_path.display(),
+        local_models_path.display()
+    )))
+}
+
+/// Get the download URL for a model
+pub fn get_model_url(model: &str) -> String {
+    let filename = match model {
+        "tiny" => "ggml-tiny.bin",
+        "tiny.en" => "ggml-tiny.en.bin",
+        "base" => "ggml-base.bin",
+        "base.en" => "ggml-base.en.bin",
+        "small" => "ggml-small.bin",
+        "small.en" => "ggml-small.en.bin",
+        "medium" => "ggml-medium.bin",
+        "medium.en" => "ggml-medium.en.bin",
+        "large-v3" => "ggml-large-v3.bin",
+        other => other,
+    };
+
+    format!(
+        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
+        filename
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_model_url() {
+        let url = get_model_url("base.en");
+        assert!(url.contains("ggml-base.en.bin"));
+        assert!(url.contains("huggingface.co"));
+    }
+}

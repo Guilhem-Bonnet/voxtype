@@ -1,0 +1,66 @@
+[package]
+name = "voxtype"
+version = "0.1.0"
+edition = "2021"
+authors = ["Pete"]
+description = "Push-to-talk voice-to-text for Wayland"
+license = "MIT"
+readme = "README.md"
+keywords = ["voice", "speech", "whisper", "wayland", "linux"]
+categories = ["multimedia::audio", "accessibility"]
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full", "signal", "sync", "time", "process", "io-util"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Configuration
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+directories = "5"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# Async traits
+async-trait = "0.1"
+
+# Input handling (evdev for kernel-level key events)
+evdev = "0.12"
+libc = "0.2"
+
+# Audio capture
+cpal = "0.15"
+hound = "3"  # WAV file reading/writing
+
+# Whisper speech-to-text
+whisper-rs = "0.12"
+
+# HTTP client (for model download in setup command)
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+
+# CPU count for thread detection
+num_cpus = "1.16"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = 3
+
+[profile.dev]
+opt-level = 1  # Faster dev builds, whisper still usable
+
+[[bin]]
+name = "voxtype"
+path = "src/main.rs"

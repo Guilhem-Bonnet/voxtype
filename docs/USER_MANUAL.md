@@ -1,0 +1,449 @@
+# Voxtype User Manual
+
+Voxtype is a push-to-talk voice-to-text tool for Wayland Linux. This manual covers everything you need to know to use Voxtype effectively.
+
+## Table of Contents
+
+- [Getting Started](#getting-started)
+- [Basic Usage](#basic-usage)
+- [Commands](#commands)
+- [Configuration](#configuration)
+- [Hotkeys](#hotkeys)
+- [Whisper Models](#whisper-models)
+- [Output Modes](#output-modes)
+- [Tips & Best Practices](#tips--best-practices)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+
+---
+
+## Getting Started
+
+After installation, you need to complete the initial setup:
+
+```bash
+# 1. Ensure you're in the input group
+groups | grep input
+
+# 2. Run the setup wizard
+voxtype setup --download
+
+# 3. Start voxtype
+voxtype
+```
+
+The setup command will:
+- Check all dependencies
+- Verify permissions
+- Download the default Whisper model (base.en)
+- Create your configuration file
+
+---
+
+## Basic Usage
+
+### The Push-to-Talk Workflow
+
+1. **Start the daemon**: Run `voxtype` in a terminal (or enable the systemd service)
+2. **Hold your hotkey**: Default is ScrollLock
+3. **Speak clearly**: Talk at a normal pace
+4. **Release the hotkey**: Your speech is transcribed
+5. **Text appears**: Either typed at cursor or copied to clipboard
+
+### Example Session
+
+```
+$ voxtype
+[INFO] Voxtype v0.1.0 starting...
+[INFO] Using model: base.en
+[INFO] Hotkey: SCROLLLOCK
+[INFO] Output mode: type (fallback: clipboard)
+[INFO] Ready! Hold SCROLLLOCK to record.
+
+# User holds ScrollLock and says "Hello world"
+[INFO] Recording started...
+[INFO] Recording stopped (1.2s)
+[INFO] Transcribing...
+[INFO] Transcribed: "Hello world"
+[INFO] Typed 11 characters
+```
+
+---
+
+## Commands
+
+### `voxtype` or `voxtype daemon`
+
+Run the voice-to-text daemon. This is the main mode of operation.
+
+```bash
+voxtype                     # Run with defaults
+voxtype -v                  # Verbose output
+voxtype -vv                 # Debug output
+voxtype --clipboard         # Force clipboard mode
+voxtype --model small.en    # Use a different model
+voxtype --hotkey PAUSE      # Use different hotkey
+```
+
+### `voxtype transcribe <file>`
+
+Transcribe an audio file without running the daemon.
+
+```bash
+voxtype transcribe recording.wav
+voxtype transcribe --model large-v3 interview.wav
+```
+
+Supported formats: WAV (16-bit PCM, 16kHz mono recommended)
+
+### `voxtype setup`
+
+Check dependencies and optionally download models.
+
+```bash
+voxtype setup              # Check dependencies only
+voxtype setup --download   # Also download default model
+voxtype setup --download --model small.en  # Download specific model
+```
+
+### `voxtype config`
+
+Display the current configuration.
+
+```bash
+voxtype config
+```
+
+---
+
+## Configuration
+
+Configuration file location: `~/.config/voxtype/config.toml`
+
+### Full Configuration Reference
+
+```toml
+[hotkey]
+# The key to hold for push-to-talk recording
+# Common choices: SCROLLLOCK, PAUSE, RIGHTALT, F13-F24
+key = "SCROLLLOCK"
+
+# Optional modifier keys that must be held with the main key
+# Examples: ["LEFTCTRL"], ["LEFTCTRL", "LEFTALT"]
+modifiers = []
+
+[audio]
+# Audio input device
+# "default" uses the system default microphone
+# List devices with: pactl list sources short
+device = "default"
+
+# Sample rate in Hz (whisper expects 16000)
+sample_rate = 16000
+
+# Maximum recording duration in seconds (safety limit)
+# Recording automatically stops after this time
+max_duration_secs = 60
+
+[whisper]
+# Model to use for transcription
+# Options: tiny, tiny.en, base, base.en, small, small.en, medium, medium.en, large-v3
+# .en models are English-only but faster/smaller
+# Can also be an absolute path to a .bin model file
+model = "base.en"
+
+# Language for transcription
+# "en" for English, "auto" for auto-detection
+# See: https://github.com/openai/whisper#available-models-and-languages
+language = "en"
+
+# Translate non-English speech to English
+translate = false
+
+# Number of CPU threads for inference
+# Omit to auto-detect optimal thread count
+# threads = 4
+
+[output]
+# Primary output mode
+# "type" - Simulates keyboard input at cursor (requires ydotool)
+# "clipboard" - Copies text to clipboard (requires wl-copy)
+mode = "type"
+
+# Fall back to clipboard if typing fails
+fallback_to_clipboard = true
+
+# Show desktop notification with transcribed text
+notification = true
+
+# Delay between typed characters in milliseconds
+# 0 = fastest, increase if characters are dropped
+type_delay_ms = 0
+```
+
+### Creating a Custom Configuration
+
+```bash
+# Copy the default config
+cp /etc/voxtype/config.toml ~/.config/voxtype/config.toml
+
+# Or generate one
+mkdir -p ~/.config/voxtype
+voxtype config > ~/.config/voxtype/config.toml
+```
+
+### Using a Custom Config File
+
+```bash
+voxtype -c /path/to/my/config.toml
+```
+
+---
+
+## Hotkeys
+
+### Supported Keys
+
+Any key supported by the Linux evdev system can be used as a hotkey:
+
+| Key | Event Name |
+|-----|------------|
+| Scroll Lock | `SCROLLLOCK` |
+| Pause/Break | `PAUSE` |
+| Right Alt | `RIGHTALT` |
+| Right Ctrl | `RIGHTCTRL` |
+| F13-F24 | `F13`, `F14`, ... `F24` |
+| Insert | `INSERT` |
+| Caps Lock* | `CAPSLOCK` |
+
+*Note: Using Caps Lock may interfere with normal typing.
+
+### Finding Key Names
+
+Use `evtest` to find the event name of any key:
+
+```bash
+sudo evtest
+# Select your keyboard device
+# Press the key you want to use
+# Look for "KEY_XXXXX" - use the part after KEY_
+```
+
+### Using Modifier Keys
+
+Require modifier keys to be held along with your hotkey:
+
+```toml
+[hotkey]
+key = "SCROLLLOCK"
+modifiers = ["LEFTCTRL"]  # Ctrl+ScrollLock
+```
+
+Available modifiers:
+- `LEFTCTRL`, `RIGHTCTRL`
+- `LEFTALT`, `RIGHTALT`
+- `LEFTSHIFT`, `RIGHTSHIFT`
+- `LEFTMETA`, `RIGHTMETA` (Super/Windows key)
+
+---
+
+## Whisper Models
+
+### Model Comparison
+
+| Model | Size | Download | RAM Usage | Speed | WER* |
+|-------|------|----------|-----------|-------|------|
+| tiny.en | 39 MB | Fast | ~400 MB | ~10x realtime | ~10% |
+| **base.en** | 142 MB | Fast | ~500 MB | ~7x realtime | ~8% |
+| small.en | 466 MB | Medium | ~1 GB | ~4x realtime | ~6% |
+| medium.en | 1.5 GB | Slow | ~2.5 GB | ~2x realtime | ~5% |
+| large-v3 | 3.1 GB | Slow | ~4 GB | ~1x realtime | ~4% |
+
+*WER = Word Error Rate (lower is better)
+
+### Choosing a Model
+
+- **tiny.en**: Best for low-end hardware, quick notes, or when speed is critical
+- **base.en**: Best balance for most users (recommended default)
+- **small.en**: When you need better accuracy but have decent hardware
+- **medium.en**: For professional transcription on modern hardware
+- **large-v3**: Maximum accuracy, multilingual support, requires significant RAM
+
+### English vs Multilingual
+
+- `.en` models: English-only, faster, more accurate for English
+- Non-.en models: Multilingual support, slightly slower
+
+### Using Custom Models
+
+Point to any whisper.cpp compatible model:
+
+```toml
+[whisper]
+model = "/path/to/my/custom-model.bin"
+```
+
+---
+
+## Output Modes
+
+### Type Mode (Default)
+
+Simulates keyboard input, typing text directly at your cursor position.
+
+**Requires**: ydotool daemon running
+
+```bash
+# Verify ydotool is working
+systemctl --user status ydotool
+```
+
+**Pros**:
+- Text appears exactly where your cursor is
+- Works in any application
+- Most natural workflow
+
+**Cons**:
+- Requires ydotool
+- May be slow in some applications (increase `type_delay_ms`)
+
+### Clipboard Mode
+
+Copies transcribed text to the clipboard.
+
+**Requires**: wl-copy (wl-clipboard package)
+
+```toml
+[output]
+mode = "clipboard"
+```
+
+**Pros**:
+- Simpler setup
+- Faster for long text
+- No typing delay issues
+
+**Cons**:
+- Requires manual paste (Ctrl+V)
+- Overwrites clipboard contents
+
+### Fallback Behavior
+
+By default, if typing fails, Voxtype falls back to clipboard:
+
+```toml
+[output]
+mode = "type"
+fallback_to_clipboard = true  # Falls back if ydotool isn't available
+```
+
+---
+
+## Tips & Best Practices
+
+### For Best Transcription Quality
+
+1. **Speak clearly**: Enunciate words, don't mumble
+2. **Maintain consistent volume**: Don't trail off at the end
+3. **Minimize background noise**: Close windows, turn off fans
+4. **Keep microphone distance consistent**: 6-12 inches is ideal
+5. **Use a quality microphone**: USB headsets work well
+
+### For Best Performance
+
+1. **Use an English model** (`.en`) if you only need English
+2. **Start with base.en**: Only upgrade if you need better accuracy
+3. **Set appropriate thread count**: Let it auto-detect or match your CPU cores
+4. **Use an SSD**: Model loading is faster from SSD
+
+### For Workflow Efficiency
+
+1. **Use a dedicated hotkey**: ScrollLock or F13+ keys avoid conflicts
+2. **Keep recordings short**: Phrase or sentence at a time
+3. **Enable notifications**: Visual feedback when transcription completes
+4. **Run as systemd service**: Starts automatically on login
+
+### Handling Punctuation
+
+Whisper attempts to add punctuation automatically. For explicit punctuation, say:
+- "period" or "full stop"
+- "comma"
+- "question mark"
+- "exclamation point"
+- "new line" or "new paragraph"
+
+---
+
+## Keyboard Shortcuts
+
+While Voxtype is running:
+
+| Action | Default Key |
+|--------|-------------|
+| Start recording | Hold ScrollLock |
+| Stop recording | Release ScrollLock |
+| Stop daemon | Ctrl+C (in terminal) |
+
+---
+
+## Logging and Debugging
+
+### Verbosity Levels
+
+```bash
+voxtype           # Normal output
+voxtype -v        # Verbose (shows transcription progress)
+voxtype -vv       # Debug (shows all internal operations)
+voxtype -q        # Quiet (errors only)
+```
+
+### Viewing Service Logs
+
+```bash
+journalctl --user -u voxtype -f
+```
+
+### Environment Variables
+
+```bash
+# Set log level via environment
+RUST_LOG=debug voxtype
+
+# Available levels: error, warn, info, debug, trace
+RUST_LOG=voxtype=debug voxtype
+```
+
+---
+
+## Integration Examples
+
+### With Systemd (Auto-start)
+
+```bash
+systemctl --user enable --now voxtype
+```
+
+### With Sway/i3
+
+Add to your config:
+```
+exec --no-startup-id voxtype
+```
+
+### With Hyprland
+
+Add to `hyprland.conf`:
+```
+exec-once = voxtype
+```
+
+### With GNOME
+
+Enable the systemd service, or add Voxtype to Startup Applications.
+
+---
+
+## Next Steps
+
+- [Configuration Reference](CONFIGURATION.md) - Detailed config options
+- [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues and solutions
+- [FAQ](FAQ.md) - Frequently asked questions

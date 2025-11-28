@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Voxtype - Push-to-talk voice-to-text for Wayland Linux. Fully offline speech recognition that works on any compositor.">
+    <meta name="keywords" content="voice to text, speech recognition, wayland, linux, whisper, offline, open source">
+    <meta name="author" content="Pete">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Voxtype - Voice to Text for Wayland Linux">
+    <meta property="og:description" content="Push-to-talk voice-to-text that works on any Wayland compositor. Fully offline, powered by Whisper.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://voxtype.dev">
+
+    <title>Voxtype - Push-to-Talk Voice-to-Text for Wayland Linux</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="#" class="nav-logo">
+                <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+                <span>Voxtype</span>
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#demo">Demo</a>
+                <a href="#install">Install</a>
+                <a href="https://github.com/peteonrails/voxtype/tree/main/docs">Docs</a>
+                <a href="https://github.com/peteonrails/voxtype" class="nav-github">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                    GitHub
+                </a>
+            </div>
+            <button class="nav-toggle" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="hero-content">
+            <h1>Voice to Text for <span class="highlight">Wayland Linux</span></h1>
+            <p class="hero-subtitle">
+                Push-to-talk voice-to-text that works on any Wayland compositor.
+                Hold a key, speak, release. Your words appear at the cursor.
+            </p>
+            <div class="hero-badges">
+                <span class="badge">Fully Offline</span>
+                <span class="badge">Open Source</span>
+                <span class="badge">Wayland Native</span>
+            </div>
+            <div class="hero-cta">
+                <a href="#install" class="btn btn-primary">Get Started</a>
+                <a href="https://github.com/peteonrails/voxtype" class="btn btn-secondary">View on GitHub</a>
+            </div>
+            <div class="hero-terminal">
+                <div class="terminal-header">
+                    <span class="terminal-dot red"></span>
+                    <span class="terminal-dot yellow"></span>
+                    <span class="terminal-dot green"></span>
+                    <span class="terminal-title">Terminal</span>
+                </div>
+                <div class="terminal-body">
+                    <pre><code><span class="prompt">$</span> voxtype
+<span class="info">[INFO]</span> Voxtype v0.1.0 starting...
+<span class="info">[INFO]</span> Using model: base.en
+<span class="info">[INFO]</span> Hotkey: SCROLLLOCK
+<span class="info">[INFO]</span> Ready! Hold SCROLLLOCK to record.
+
+<span class="comment"># User holds ScrollLock and speaks...</span>
+<span class="info">[INFO]</span> Recording started...
+<span class="info">[INFO]</span> Recording stopped (2.1s)
+<span class="info">[INFO]</span> Transcribing...
+<span class="success">[INFO]</span> Transcribed: "<span class="output">Hello world, this is a test.</span>"
+<span class="success">[INFO]</span> Typed 30 characters</code></pre>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <h2>Why Voxtype?</h2>
+            <p class="section-subtitle">Built specifically for the modern Linux desktop</p>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                    </div>
+                    <h3>Works on All Wayland Compositors</h3>
+                    <p>
+                        Uses kernel-level input (evdev) instead of compositor-specific protocols.
+                        Works on GNOME, KDE, Sway, Hyprland, and any other Wayland compositor.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            <polyline points="9 12 12 15 16 10"/>
+                        </svg>
+                    </div>
+                    <h3>Fully Offline & Private</h3>
+                    <p>
+                        All speech recognition happens locally using whisper.cpp.
+                        Your voice never leaves your machine. No cloud, no subscriptions, no tracking.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                            <line x1="12" y1="19" x2="12" y2="23"/>
+                            <line x1="8" y1="23" x2="16" y2="23"/>
+                        </svg>
+                    </div>
+                    <h3>Push-to-Talk</h3>
+                    <p>
+                        Natural workflow: hold a key to record, release to transcribe.
+                        No "wake words", no accidental activations, just controlled dictation.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        </svg>
+                    </div>
+                    <h3>Highly Configurable</h3>
+                    <p>
+                        Choose your hotkey, Whisper model size, output mode (type or clipboard),
+                        and more. Works the way you want it to.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="16 18 22 12 16 6"/>
+                            <polyline points="8 6 2 12 8 18"/>
+                        </svg>
+                    </div>
+                    <h3>Smart Fallbacks</h3>
+                    <p>
+                        Types directly at cursor via ydotool, automatically falls back to clipboard
+                        if typing isn't available. Always works, one way or another.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                        </svg>
+                    </div>
+                    <h3>Fast & Lightweight</h3>
+                    <p>
+                        Written in Rust for performance. Single binary, minimal dependencies.
+                        Uses ~500MB RAM with the recommended model.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Demo Section -->
+    <section id="demo" class="demo">
+        <div class="container">
+            <h2>How It Works</h2>
+            <p class="section-subtitle">Simple, intuitive, effective</p>
+
+            <div class="demo-steps">
+                <div class="demo-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Hold Your Hotkey</h3>
+                        <p>Press and hold ScrollLock (or your configured key) to start recording.</p>
+                        <div class="step-visual">
+                            <div class="key-animation">
+                                <span class="key">ScrollLock</span>
+                                <span class="key-state">Hold</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="demo-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Speak Naturally</h3>
+                        <p>Talk at a normal pace. Voxtype captures audio from your microphone.</p>
+                        <div class="step-visual">
+                            <div class="waveform">
+                                <span class="wave-bar"></span>
+                                <span class="wave-bar"></span>
+                                <span class="wave-bar"></span>
+                                <span class="wave-bar"></span>
+                                <span class="wave-bar"></span>
+                                <span class="wave-bar"></span>
+                                <span class="wave-bar"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="demo-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Release to Transcribe</h3>
+                        <p>Let go of the key. Whisper processes your speech locally.</p>
+                        <div class="step-visual">
+                            <div class="processing-animation">
+                                <div class="spinner"></div>
+                                <span>Transcribing...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="demo-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Text Appears</h3>
+                        <p>Your words are typed at the cursor or copied to clipboard.</p>
+                        <div class="step-visual">
+                            <div class="typing-animation">
+                                <span class="typed-text"></span>
+                                <span class="cursor">|</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Models Section -->
+    <section id="models" class="models">
+        <div class="container">
+            <h2>Choose Your Model</h2>
+            <p class="section-subtitle">Balance speed and accuracy for your needs</p>
+
+            <div class="model-table-wrapper">
+                <table class="model-table">
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Size</th>
+                            <th>Speed</th>
+                            <th>Accuracy</th>
+                            <th>Best For</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>tiny.en</code></td>
+                            <td>39 MB</td>
+                            <td>
+                                <div class="speed-bar">
+                                    <div class="speed-fill" style="width: 100%"></div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="accuracy-bar">
+                                    <div class="accuracy-fill" style="width: 60%"></div>
+                                </div>
+                            </td>
+                            <td>Quick notes, low-end hardware</td>
+                        </tr>
+                        <tr class="recommended">
+                            <td><code>base.en</code> <span class="rec-badge">Recommended</span></td>
+                            <td>142 MB</td>
+                            <td>
+                                <div class="speed-bar">
+                                    <div class="speed-fill" style="width: 85%"></div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="accuracy-bar">
+                                    <div class="accuracy-fill" style="width: 75%"></div>
+                                </div>
+                            </td>
+                            <td>Most users</td>
+                        </tr>
+                        <tr>
+                            <td><code>small.en</code></td>
+                            <td>466 MB</td>
+                            <td>
+                                <div class="speed-bar">
+                                    <div class="speed-fill" style="width: 60%"></div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="accuracy-bar">
+                                    <div class="accuracy-fill" style="width: 85%"></div>
+                                </div>
+                            </td>
+                            <td>Higher accuracy needs</td>
+                        </tr>
+                        <tr>
+                            <td><code>medium.en</code></td>
+                            <td>1.5 GB</td>
+                            <td>
+                                <div class="speed-bar">
+                                    <div class="speed-fill" style="width: 35%"></div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="accuracy-bar">
+                                    <div class="accuracy-fill" style="width: 92%"></div>
+                                </div>
+                            </td>
+                            <td>Professional transcription</td>
+                        </tr>
+                        <tr>
+                            <td><code>large-v3</code></td>
+                            <td>3.1 GB</td>
+                            <td>
+                                <div class="speed-bar">
+                                    <div class="speed-fill" style="width: 20%"></div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="accuracy-bar">
+                                    <div class="accuracy-fill" style="width: 100%"></div>
+                                </div>
+                            </td>
+                            <td>Maximum accuracy, multilingual</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="model-note">
+                <strong>.en models</strong> are English-only but faster and more accurate for English content.
+            </p>
+        </div>
+    </section>
+
+    <!-- Install Section -->
+    <section id="install" class="install">
+        <div class="container">
+            <h2>Installation</h2>
+            <p class="section-subtitle">Get up and running in minutes</p>
+
+            <div class="install-tabs">
+                <button class="tab-btn active" data-tab="arch">Arch Linux</button>
+                <button class="tab-btn" data-tab="debian">Debian/Ubuntu</button>
+                <button class="tab-btn" data-tab="fedora">Fedora</button>
+                <button class="tab-btn" data-tab="source">From Source</button>
+            </div>
+
+            <div class="install-content">
+                <div id="arch" class="tab-content active">
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Install from AUR</span>
+                            <button class="copy-btn" data-copy="paru -S voxtype">Copy</button>
+                        </div>
+                        <pre><code><span class="comment"># Using paru</span>
+paru -S voxtype
+
+<span class="comment"># Or using yay</span>
+yay -S voxtype
+
+<span class="comment"># Install optional dependencies</span>
+sudo pacman -S ydotool wl-clipboard</code></pre>
+                    </div>
+                </div>
+
+                <div id="debian" class="tab-content">
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Install .deb package</span>
+                            <button class="copy-btn">Copy</button>
+                        </div>
+                        <pre><code><span class="comment"># Download and install</span>
+wget https://github.com/peteonrails/voxtype/releases/download/v0.1.0/voxtype_0.1.0-1_amd64.deb
+sudo dpkg -i voxtype_0.1.0-1_amd64.deb
+sudo apt-get install -f
+
+<span class="comment"># Install optional dependencies</span>
+sudo apt install ydotool wl-clipboard</code></pre>
+                    </div>
+                </div>
+
+                <div id="fedora" class="tab-content">
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Install RPM package</span>
+                            <button class="copy-btn">Copy</button>
+                        </div>
+                        <pre><code><span class="comment"># Download and install</span>
+wget https://github.com/peteonrails/voxtype/releases/download/v0.1.0/voxtype-0.1.0-1.fc39.x86_64.rpm
+sudo dnf install ./voxtype-0.1.0-1.fc39.x86_64.rpm
+
+<span class="comment"># Install optional dependencies</span>
+sudo dnf install ydotool wl-clipboard</code></pre>
+                    </div>
+                </div>
+
+                <div id="source" class="tab-content">
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Build from source</span>
+                            <button class="copy-btn">Copy</button>
+                        </div>
+                        <pre><code><span class="comment"># Install Rust (if needed)</span>
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+<span class="comment"># Install build dependencies (Arch)</span>
+sudo pacman -S base-devel clang alsa-lib
+
+<span class="comment"># Clone and build</span>
+git clone https://github.com/peteonrails/voxtype
+cd voxtype
+cargo build --release
+
+<span class="comment"># Install</span>
+sudo cp target/release/voxtype /usr/local/bin/</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="post-install">
+                <h3>Post-Installation Setup</h3>
+                <div class="code-block">
+                    <pre><code><span class="comment"># Add user to input group (required for hotkey detection)</span>
+sudo usermod -aG input $USER
+<span class="comment"># Log out and back in for group change to take effect</span>
+
+<span class="comment"># Start ydotool daemon (for typing output)</span>
+systemctl --user enable --now ydotool
+
+<span class="comment"># Download whisper model and verify setup</span>
+voxtype setup --download
+
+<span class="comment"># Start voxtype!</span>
+voxtype</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Compositors Section -->
+    <section id="compositors" class="compositors">
+        <div class="container">
+            <h2>Works Everywhere</h2>
+            <p class="section-subtitle">Tested on all major Wayland compositors</p>
+
+            <div class="compositor-grid">
+                <div class="compositor-card">
+                    <img src="images/gnome.svg" alt="GNOME" class="compositor-logo">
+                    <span>GNOME</span>
+                </div>
+                <div class="compositor-card">
+                    <img src="images/kde.svg" alt="KDE Plasma" class="compositor-logo">
+                    <span>KDE Plasma</span>
+                </div>
+                <div class="compositor-card">
+                    <img src="images/sway.svg" alt="Sway" class="compositor-logo">
+                    <span>Sway</span>
+                </div>
+                <div class="compositor-card">
+                    <img src="images/hyprland.svg" alt="Hyprland" class="compositor-logo">
+                    <span>Hyprland</span>
+                </div>
+                <div class="compositor-card">
+                    <img src="images/wayland.svg" alt="Any Wayland" class="compositor-logo">
+                    <span>Any Wayland</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta">
+        <div class="container">
+            <h2>Ready to try Voxtype?</h2>
+            <p>Start dictating on your Wayland desktop today.</p>
+            <div class="cta-buttons">
+                <a href="#install" class="btn btn-primary btn-large">Get Started</a>
+                <a href="https://github.com/peteonrails/voxtype" class="btn btn-secondary btn-large">View Source</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <a href="#" class="footer-logo">
+                        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                            <line x1="12" y1="19" x2="12" y2="23"/>
+                            <line x1="8" y1="23" x2="16" y2="23"/>
+                        </svg>
+                        <span>Voxtype</span>
+                    </a>
+                    <p>Push-to-talk voice-to-text for Wayland Linux</p>
+                </div>
+
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Documentation</h4>
+                        <a href="https://github.com/peteonrails/voxtype/blob/main/docs/INSTALL.md">Installation</a>
+                        <a href="https://github.com/peteonrails/voxtype/blob/main/docs/USER_MANUAL.md">User Manual</a>
+                        <a href="https://github.com/peteonrails/voxtype/blob/main/docs/CONFIGURATION.md">Configuration</a>
+                        <a href="https://github.com/peteonrails/voxtype/blob/main/docs/FAQ.md">FAQ</a>
+                    </div>
+
+                    <div class="footer-column">
+                        <h4>Community</h4>
+                        <a href="https://github.com/peteonrails/voxtype">GitHub</a>
+                        <a href="https://github.com/peteonrails/voxtype/issues">Issues</a>
+                        <a href="https://github.com/peteonrails/voxtype/discussions">Discussions</a>
+                    </div>
+
+                    <div class="footer-column">
+                        <h4>Legal</h4>
+                        <a href="https://github.com/peteonrails/voxtype/blob/main/LICENSE">MIT License</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>&copy; 2024 Voxtype. Open source under the MIT License.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

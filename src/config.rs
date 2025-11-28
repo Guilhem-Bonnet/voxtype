@@ -1,0 +1,246 @@
+//! Configuration loading and types for voxtype
+//!
+//! Configuration is loaded in layers:
+//! 1. Built-in defaults
+//! 2. Config file (~/.config/voxtype/config.toml)
+//! 3. Environment variables (VOXTYPE_*)
+//! 4. CLI arguments (highest priority)
+
+use crate::error::VoxtypeError;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+
+/// Root configuration structure
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Config {
+    pub hotkey: HotkeyConfig,
+    pub audio: AudioConfig,
+    pub whisper: WhisperConfig,
+    pub output: OutputConfig,
+}
+
+/// Hotkey detection configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct HotkeyConfig {
+    /// Key name (evdev KEY_* constant name, without the KEY_ prefix)
+    /// Examples: "SCROLLLOCK", "RIGHTALT", "PAUSE", "F24"
+    pub key: String,
+
+    /// Optional modifier keys that must also be held
+    /// Examples: ["LEFTCTRL"], ["LEFTALT", "LEFTSHIFT"]
+    #[serde(default)]
+    pub modifiers: Vec<String>,
+}
+
+/// Audio capture configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AudioConfig {
+    /// PipeWire/PulseAudio device name, or "default"
+    pub device: String,
+
+    /// Sample rate in Hz (whisper expects 16000)
+    pub sample_rate: u32,
+
+    /// Maximum recording duration in seconds (safety limit)
+    pub max_duration_secs: u32,
+}
+
+/// Whisper speech-to-text configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct WhisperConfig {
+    /// Model name: tiny, base, small, medium, large-v3
+    /// Can also be an absolute path to a .bin file
+    pub model: String,
+
+    /// Language code (en, es, fr, auto, etc.)
+    pub language: String,
+
+    /// Translate to English if source language is not English
+    #[serde(default)]
+    pub translate: bool,
+
+    /// Number of threads for inference (None = auto-detect)
+    pub threads: Option<usize>,
+}
+
+/// Text output configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct OutputConfig {
+    /// Primary output mode
+    pub mode: OutputMode,
+
+    /// Fall back to clipboard if typing fails
+    #[serde(default = "default_true")]
+    pub fallback_to_clipboard: bool,
+
+    /// Show desktop notification with transcribed text
+    #[serde(default = "default_true")]
+    pub notification: bool,
+
+    /// Delay between typed characters (ms), 0 for fastest
+    #[serde(default)]
+    pub type_delay_ms: u32,
+}
+
+/// Output mode selection
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum OutputMode {
+    /// Simulate keyboard input (requires ydotool)
+    Type,
+    /// Copy to clipboard (requires wl-copy)
+    Clipboard,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            hotkey: HotkeyConfig {
+                key: "SCROLLLOCK".to_string(),
+                modifiers: vec![],
+            },
+            audio: AudioConfig {
+                device: "default".to_string(),
+                sample_rate: 16000,
+                max_duration_secs: 60,
+            },
+            whisper: WhisperConfig {
+                model: "base.en".to_string(),
+                language: "en".to_string(),
+                translate: false,
+                threads: None,
+            },
+            output: OutputConfig {
+                mode: OutputMode::Type,
+                fallback_to_clipboard: true,
+                notification: true,
+                type_delay_ms: 0,
+            },
+        }
+    }
+}
+
+impl Config {
+    /// Get the default config file path
+    pub fn default_path() -> Option<PathBuf> {
+        directories::ProjectDirs::from("", "", "voxtype")
+            .map(|dirs| dirs.config_dir().join("config.toml"))
+    }
+
+    /// Get the data directory path (for models)
+    pub fn data_dir() -> PathBuf {
+        directories::ProjectDirs::from("", "", "voxtype")
+            .map(|dirs| dirs.data_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."))
+    }
+
+    /// Get the models directory path
+    pub fn models_dir() -> PathBuf {
+        Self::data_dir().join("models")
+    }
+}
+
+/// Load configuration from file, with defaults for missing values
+pub fn load_config(path: Option<&Path>) -> Result<Config, VoxtypeError> {
+    // Start with defaults
+    let mut config = Config::default();
+
+    // Determine config file path
+    let config_path = path
+        .map(PathBuf::from)
+        .or_else(Config::default_path);
+
+    // Load from file if it exists
+    if let Some(ref path) = config_path {
+        if path.exists() {
+            tracing::debug!("Loading config from {:?}", path);
+            let contents = std::fs::read_to_string(path)
+                .map_err(|e| VoxtypeError::Config(format!("Failed to read config: {}", e)))?;
+
+            config = toml::from_str(&contents)
+                .map_err(|e| VoxtypeError::Config(format!("Invalid config: {}", e)))?;
+        } else {
+            tracing::debug!("Config file not found at {:?}, using defaults", path);
+        }
+    }
+
+    // Override from environment variables
+    if let Ok(key) = std::env::var("VOXTYPE_HOTKEY") {
+        config.hotkey.key = key;
+    }
+    if let Ok(model) = std::env::var("VOXTYPE_MODEL") {
+        config.whisper.model = model;
+    }
+    if let Ok(mode) = std::env::var("VOXTYPE_OUTPUT_MODE") {
+        config.output.mode = match mode.to_lowercase().as_str() {
+            "clipboard" => OutputMode::Clipboard,
+            _ => OutputMode::Type,
+        };
+    }
+
+    Ok(config)
+}
+
+/// Save configuration to file
+pub fn save_config(config: &Config, path: &Path) -> Result<(), VoxtypeError> {
+    // Ensure parent directory exists
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| VoxtypeError::Config(format!("Failed to create config dir: {}", e)))?;
+    }
+
+    let contents = toml::to_string_pretty(config)
+        .map_err(|e| VoxtypeError::Config(format!("Failed to serialize config: {}", e)))?;
+
+    std::fs::write(path, contents)
+        .map_err(|e| VoxtypeError::Config(format!("Failed to write config: {}", e)))?;
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config() {
+        let config = Config::default();
+        assert_eq!(config.hotkey.key, "SCROLLLOCK");
+        assert_eq!(config.audio.sample_rate, 16000);
+        assert_eq!(config.whisper.model, "base.en");
+        assert_eq!(config.output.mode, OutputMode::Type);
+    }
+
+    #[test]
+    fn test_parse_config_toml() {
+        let toml_str = r#"
+            [hotkey]
+            key = "PAUSE"
+            modifiers = ["LEFTCTRL"]
+            
+            [audio]
+            device = "default"
+            sample_rate = 16000
+            max_duration_secs = 30
+            
+            [whisper]
+            model = "small.en"
+            language = "en"
+            
+            [output]
+            mode = "clipboard"
+            notification = false
+        "#;
+
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.hotkey.key, "PAUSE");
+        assert_eq!(config.hotkey.modifiers, vec!["LEFTCTRL"]);
+        assert_eq!(config.whisper.model, "small.en");
+        assert_eq!(config.output.mode, OutputMode::Clipboard);
+        assert!(!config.output.notification);
+    }
+}

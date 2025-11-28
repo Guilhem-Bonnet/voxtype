@@ -1,0 +1,20 @@
+# Build artifacts
+/target
+/dist
+
+# Whisper models (large binary files)
+/models/*.bin
+
+# Editor/IDE
+*.swp
+*~
+.DS_Store
+.idea/
+.vscode/
+
+# Audio files (test recordings)
+*.wav
+*.mp3
+
+# Claude Code
+.claude/

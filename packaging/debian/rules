@@ -1,0 +1,39 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export CARGO_HOME = $(CURDIR)/debian/cargo_home
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --release --locked
+
+override_dh_auto_install:
+	# Install binary
+	install -D -m 755 target/release/voxtype debian/voxtype/usr/bin/voxtype
+	# Install default configuration
+	install -D -m 644 config/default.toml debian/voxtype/etc/voxtype/config.toml
+	# Install documentation
+	install -D -m 644 README.md debian/voxtype/usr/share/doc/voxtype/README.md
+	install -D -m 644 docs/INSTALL.md debian/voxtype/usr/share/doc/voxtype/INSTALL.md
+	# Install shell completions
+	install -D -m 644 packaging/completions/voxtype.bash \
+		debian/voxtype/usr/share/bash-completion/completions/voxtype
+	install -D -m 644 packaging/completions/voxtype.zsh \
+		debian/voxtype/usr/share/zsh/vendor-completions/_voxtype
+	install -D -m 644 packaging/completions/voxtype.fish \
+		debian/voxtype/usr/share/fish/vendor_completions.d/voxtype.fish
+
+override_dh_auto_test:
+	cargo test --release --locked
+
+override_dh_installsystemd:
+	dh_installsystemd --user --name=voxtype
+
+override_dh_auto_clean:
+	cargo clean || true
+	rm -rf debian/cargo_home
+
+override_dh_shlibdeps:
+	dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
