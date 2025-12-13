@@ -110,6 +110,15 @@ echo ""
 %{_datadir}/fish/vendor_completions.d/voxtype.fish
 
 %changelog
+* Sat Dec 13 2025 Peter Jackson <pete@peteonrails.com> - 0.2.0-1
+- Add optional GPU acceleration (Vulkan, CUDA, Metal, HIP/ROCm)
+- Upgrade whisper-rs to 0.15.1
+- Add multilingual support with language auto-detection
+- Add translation to English from any language
+- Fix ydotool double-typing with --key-hold parameter
+- Fix Arch PKGBUILD build dependencies (cmake, pkgconf)
+- Contributors: jvantillo (GPU acceleration patch)
+
 * Sat Nov 29 2025 Peter Jackson <pete@peteonrails.com> - 0.1.2-1
 - Add toggle mode: press hotkey once to start/stop recording
 - Add audio feedback with configurable sound themes
