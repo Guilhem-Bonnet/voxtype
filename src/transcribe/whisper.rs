@@ -76,7 +76,10 @@ impl Transcriber for WhisperTranscriber {
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
 
         // Set language (handle "auto" for auto-detection)
-        if self.language != "auto" {
+        if self.language == "auto" {
+            // Pass None to enable auto-detection
+            params.set_language(None);
+        } else {
             params.set_language(Some(&self.language));
         }
 
