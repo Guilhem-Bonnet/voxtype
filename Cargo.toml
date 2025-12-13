@@ -55,6 +55,13 @@ num_cpus = "1.16"
 # File watching for status --follow
 notify = "6"
 
+[features]
+default = []
+gpu-vulkan = ["whisper-rs/vulkan"]
+gpu-cuda = ["whisper-rs/cuda"]
+gpu-metal = ["whisper-rs/metal"]
+gpu-hipblas = ["whisper-rs/hipblas"]
+
 [dev-dependencies]
 tempfile = "3"
 
