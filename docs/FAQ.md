@@ -93,16 +93,18 @@ modifiers = ["LEFTCTRL"]  # Ctrl+ScrollLock
 Yes! Use a multilingual model (without `.en` suffix) and set the language:
 ```toml
 [whisper]
-model = "base"      # Multilingual model
-language = "auto"   # Auto-detect language
+model = "large-v3"  # Best multilingual model (99 languages)
+language = "auto"   # Auto-detect language (or: "es", "fr", "de", "ja", etc.)
 ```
+
+With GPU acceleration, `large-v3` achieves sub-second inference while supporting all languages.
 
 ### Can it translate to English?
 
 Yes! Enable translation:
 ```toml
 [whisper]
-model = "base"
+model = "large-v3"
 language = "auto"
 translate = true    # Translate to English
 ```

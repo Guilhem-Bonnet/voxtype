@@ -151,6 +151,19 @@ Options:
 
 For most uses, `base.en` provides a good balance of speed and accuracy.
 
+### Multilingual Support
+
+The `.en` models are English-only but faster and more accurate for English. For other languages, use the non-`.en` models:
+
+```toml
+[whisper]
+model = "large-v3"    # Supports 99 languages
+language = "auto"     # Auto-detect language (or specify: "es", "fr", "de", "ja", etc.)
+translate = false     # Set to true to translate to English
+```
+
+With GPU acceleration, `large-v3` achieves sub-second inference while supporting all languages.
+
 ## GPU Acceleration
 
 Voxtype supports optional GPU acceleration for significantly faster inference. With GPU acceleration, even the `large-v3` model can achieve sub-second inference times.
