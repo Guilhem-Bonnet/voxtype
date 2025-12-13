@@ -153,13 +153,30 @@ For most uses, `base.en` provides a good balance of speed and accuracy.
 
 ### Multilingual Support
 
-The `.en` models are English-only but faster and more accurate for English. For other languages, use the non-`.en` models:
+The `.en` models are English-only but faster and more accurate for English. For other languages, use `large-v3` which supports 99 languages.
 
+**Use Case 1: Transcribe in the spoken language** (speak French, output French)
 ```toml
 [whisper]
-model = "large-v3"    # Supports 99 languages
-language = "auto"     # Auto-detect language (or specify: "es", "fr", "de", "ja", etc.)
-translate = false     # Set to true to translate to English
+model = "large-v3"
+language = "auto"     # Auto-detect and transcribe in that language
+translate = false
+```
+
+**Use Case 2: Translate to English** (speak French, output English)
+```toml
+[whisper]
+model = "large-v3"
+language = "auto"     # Auto-detect the spoken language
+translate = true      # Translate output to English
+```
+
+**Use Case 3: Force a specific language** (always transcribe as Spanish)
+```toml
+[whisper]
+model = "large-v3"
+language = "es"       # Force Spanish transcription
+translate = false
 ```
 
 With GPU acceleration, `large-v3` achieves sub-second inference while supporting all languages.

@@ -90,23 +90,26 @@ modifiers = ["LEFTCTRL"]  # Ctrl+ScrollLock
 
 ### Does it support multiple languages?
 
-Yes! Use a multilingual model (without `.en` suffix) and set the language:
+Yes! Use `large-v3` which supports 99 languages:
+
+**Transcribe in the spoken language** (speak French, output French):
 ```toml
 [whisper]
-model = "large-v3"  # Best multilingual model (99 languages)
-language = "auto"   # Auto-detect language (or: "es", "fr", "de", "ja", etc.)
+model = "large-v3"
+language = "auto"
+translate = false
 ```
 
 With GPU acceleration, `large-v3` achieves sub-second inference while supporting all languages.
 
 ### Can it translate to English?
 
-Yes! Enable translation:
+Yes! Speak any language and get English output:
 ```toml
 [whisper]
 model = "large-v3"
 language = "auto"
-translate = true    # Translate to English
+translate = true
 ```
 
 ### Can I transcribe audio files?
