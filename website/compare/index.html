@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Compare Voxtype with other Linux speech-to-text tools. Find the best voice dictation solution for your setup.">
-    <meta name="keywords" content="linux speech to text comparison, voxtype alternatives, whisper vs vosk, wayland voice dictation">
-    <title>Linux Speech-to-Text Comparison | Voxtype</title>
+    <meta name="description" content="Looking for a nerd-dictation alternative for Wayland? Compare Voxtype with nerd-dictation, Speech Note, Blurt, and other Linux speech-to-text tools. Honest feature comparison.">
+    <meta name="keywords" content="nerd-dictation alternative, speech to text linux wayland, wayland voice dictation, whisper linux, offline speech recognition linux, hyprland voice typing, sway dictation">
+    <title>Nerd-Dictation Alternative for Wayland | Linux Speech-to-Text Comparison</title>
     <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/compare.css">
     <link rel="icon" type="image/svg+xml" href="../images/favicon.svg">
@@ -129,6 +129,38 @@
                             <td><span class="partial">IBus req.</span></td>
                             <td>Hard</td>
                         </tr>
+                        <tr>
+                            <td>hyprwhspr</td>
+                            <td>Whisper</td>
+                            <td><span class="check">Yes</span></td>
+                            <td><span class="check">Native</span></td>
+                            <td><span class="no">Arch/Hyprland</span></td>
+                            <td>Easy</td>
+                        </tr>
+                        <tr>
+                            <td>waystt</td>
+                            <td>Whisper</td>
+                            <td><span class="partial">Optional</span></td>
+                            <td><span class="check">Native</span></td>
+                            <td><span class="check">Yes</span></td>
+                            <td>Medium</td>
+                        </tr>
+                        <tr>
+                            <td>VoxInput</td>
+                            <td>LocalAI</td>
+                            <td><span class="partial">Via LocalAI</span></td>
+                            <td><span class="check">Yes</span></td>
+                            <td><span class="check">Yes</span></td>
+                            <td>Hard</td>
+                        </tr>
+                        <tr>
+                            <td>VOXD</td>
+                            <td>Whisper</td>
+                            <td><span class="check">Yes</span></td>
+                            <td><span class="check">Yes</span></td>
+                            <td><span class="check">Yes</span></td>
+                            <td>Medium</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -216,6 +248,19 @@
                     <p>Use Windows and Linux?</p>
                     <p class="rec-answer"><strong>WhisperWriter</strong> - Python app that works on both platforms.</p>
                 </div>
+                <div class="rec-card">
+                    <div class="rec-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="4" rx="1"/>
+                            <rect x="4" y="9" width="4" height="4" rx="1"/>
+                            <rect x="10" y="9" width="4" height="4" rx="1"/>
+                            <rect x="16" y="9" width="4" height="4" rx="1"/>
+                        </svg>
+                    </div>
+                    <h3>Tiling WM + Waybar</h3>
+                    <p>Want status bar integration?</p>
+                    <p class="rec-answer"><strong>Voxtype</strong> - built-in Waybar module shows recording state. Runs as systemd service.</p>
+                </div>
             </div>
         </div>
     </section>
@@ -290,6 +335,26 @@
                 <a href="vocalinux.html" class="compare-link-card">
                     <h3>Voxtype vs Vocalinux</h3>
                     <p>Daemon vs foreground. Both have audio feedback and cursor injection.</p>
+                    <span class="link-arrow">&rarr;</span>
+                </a>
+                <a href="hyprwhspr.html" class="compare-link-card">
+                    <h3>Voxtype vs hyprwhspr</h3>
+                    <p>Both Whisper-based. Universal vs Arch/Hyprland-focused.</p>
+                    <span class="link-arrow">&rarr;</span>
+                </a>
+                <a href="waystt.html" class="compare-link-card">
+                    <h3>Voxtype vs waystt</h3>
+                    <p>Both Rust. Daemon vs signal-driven. Offline vs cloud default.</p>
+                    <span class="link-arrow">&rarr;</span>
+                </a>
+                <a href="voxinput.html" class="compare-link-card">
+                    <h3>Voxtype vs VoxInput</h3>
+                    <p>Embedded Whisper vs LocalAI API. Simple vs flexible.</p>
+                    <span class="link-arrow">&rarr;</span>
+                </a>
+                <a href="voxd.html" class="compare-link-card">
+                    <h3>Voxtype vs VOXD</h3>
+                    <p>CLI daemon vs multi-UI app. Both use whisper.cpp offline.</p>
                     <span class="link-arrow">&rarr;</span>
                 </a>
             </div>

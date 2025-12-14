@@ -366,7 +366,9 @@ type_delay_ms = 10
 We want to hear from you! Voxtype is a young project and your feedback helps make it better.
 
 - **Something not working?** If Voxtype doesn't install cleanly, doesn't work on your system, or is buggy in any way, please [open an issue](https://github.com/peteonrails/voxtype/issues). I actively monitor and respond to issues.
-- **Like Voxtype?** I don't accept donations, but if you find it useful, a star on the [GitHub repository](https://github.com/peteonrails/voxtype) would mean a lot!
+- **Like Voxtype?** I don't accept donations, but if you find it useful:
+  - A [GitHub star](https://github.com/peteonrails/voxtype) helps others discover the project
+  - Arch users: a vote on the [AUR package](https://aur.archlinux.org/packages/voxtype) helps keep it maintained
 
 ## Contributors
 
