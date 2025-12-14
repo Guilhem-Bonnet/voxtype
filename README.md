@@ -73,7 +73,7 @@ modifiers = []      # Optional: ["LEFTCTRL", "LEFTALT"]
 # mode = "toggle"   # Uncomment for toggle mode (press to start/stop)
 
 [audio]
-device = "default"
+device = "default"  # Or specific device from `pactl list sources short`
 sample_rate = 16000
 max_duration_secs = 60
 
@@ -84,19 +84,28 @@ max_duration_secs = 60
 # volume = 0.7        # 0.0 to 1.0
 
 [whisper]
-model = "base.en"   # tiny, base, small, medium, large-v3
-language = "en"     # Or "auto" for detection
-translate = false
+model = "base.en"   # tiny, base, small, medium, large-v3, large-v3-turbo
+language = "en"     # Or "auto" for detection, or language code (es, fr, de, etc.)
+translate = false   # Translate non-English speech to English
+# threads = 4       # CPU threads for inference (omit for auto-detect)
 
 [output]
 mode = "type"       # "type" or "clipboard"
 fallback_to_clipboard = true
-type_delay_ms = 0
+type_delay_ms = 0   # Increase if characters are dropped
 
 [output.notification]
 on_recording_start = false  # Notify when PTT activates
 on_recording_stop = false   # Notify when transcribing
 on_transcription = true     # Show transcribed text
+
+# Text processing (word replacements, spoken punctuation)
+# [text]
+# spoken_punctuation = true  # Say "period" → ".", "open paren" → "("
+# replacements = { "hyperwhisper" = "hyprwhspr", "javascript" = "JavaScript" }
+
+# State file for Waybar/polybar integration
+# state_file = "auto"  # Or custom path like "/tmp/voxtype-state"
 ```
 
 ### Audio Feedback
