@@ -71,6 +71,16 @@
                 <td>Audio + Visual</td>
             </tr>
             <tr>
+                <td>GPU Acceleration</td>
+                <td>Vulkan, CUDA, Metal, ROCm</td>
+                <td>No</td>
+            </tr>
+            <tr>
+                <td>Text Processing</td>
+                <td>Word replacements, spoken punctuation</td>
+                <td>No</td>
+            </tr>
+            <tr>
                 <td>Voice Commands</td>
                 <td>No</td>
                 <td>Yes</td>
@@ -109,9 +119,10 @@ vocalinux
 
         <h3>Voxtype</h3>
         <pre><code># Package install (Debian/Ubuntu)
-curl -LO https://github.com/peteonrails/voxtype/releases/download/v0.1.2/voxtype_0.1.2-1_amd64.deb
-sudo dpkg -i voxtype_0.1.2-1_amd64.deb
-voxtype setup --download
+curl -LO https://github.com/peteonrails/voxtype/releases/download/v0.2.1/voxtype_0.2.1-1_amd64.deb
+sudo dpkg -i voxtype_0.2.1-1_amd64.deb
+voxtype setup model
+voxtype setup systemd
 systemctl --user enable --now voxtype</code></pre>
         <p><strong>Time to first dictation: ~5 minutes</strong></p>
 

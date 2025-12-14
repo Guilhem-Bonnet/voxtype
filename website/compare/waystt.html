@@ -80,6 +80,16 @@
                 <td>Built-in (ydotool)</td>
                 <td>Via <code>--pipe-to</code></td>
             </tr>
+            <tr>
+                <td>GPU Acceleration</td>
+                <td><strong>Vulkan, CUDA, Metal, ROCm</strong></td>
+                <td>No</td>
+            </tr>
+            <tr>
+                <td>Text Processing</td>
+                <td><strong>Word replacements, spoken punctuation</strong></td>
+                <td>None</td>
+            </tr>
         </table>
 
         <h2>Critical Differences</h2>
@@ -101,7 +111,8 @@
         <h3>Voxtype</h3>
         <pre><code># Install and run - handles everything
 paru -S voxtype
-voxtype setup --download
+voxtype setup model
+voxtype setup systemd
 systemctl --user enable --now voxtype
 
 # That's it. Hold ScrollLock to dictate.</code></pre>
@@ -134,6 +145,8 @@ mkdir -p ~/.local/share/waystt
             <li><strong>Zero WM config</strong> - Hotkeys work out of the box, no keybind setup</li>
             <li><strong>Always ready</strong> - Daemon is instant, no startup latency</li>
             <li><strong>Privacy-first</strong> - No cloud option means no temptation to send voice data</li>
+            <li><strong>GPU acceleration</strong> - Vulkan, CUDA, Metal, ROCm support for faster transcription</li>
+            <li><strong>Text processing</strong> - Word replacements and spoken punctuation built-in</li>
             <li><strong>Integrated typing</strong> - Text appears at cursor automatically</li>
             <li><strong>Waybar module</strong> - Built-in status indicator</li>
         </ul>

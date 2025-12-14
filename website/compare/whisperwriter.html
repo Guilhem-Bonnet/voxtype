@@ -65,6 +65,16 @@
                 <td>~50MB</td>
                 <td>~300-500MB</td>
             </tr>
+            <tr>
+                <td>GPU Acceleration</td>
+                <td>Vulkan, CUDA, Metal, ROCm</td>
+                <td>CUDA only</td>
+            </tr>
+            <tr>
+                <td>Text Processing</td>
+                <td>Word replacements, spoken punctuation</td>
+                <td>Limited</td>
+            </tr>
         </table>
 
         <h2>Platform Support</h2>
@@ -110,11 +120,11 @@
 
         <h3>Voxtype</h3>
         <pre><code># Install
-sudo dpkg -i voxtype_0.1.2-1_amd64.deb
+sudo dpkg -i voxtype_0.2.1-1_amd64.deb
 
-# Setup and run
-voxtype setup --download
-systemctl --user enable --now voxtype</code></pre>
+# Interactive setup
+voxtype setup model     # Select and download model
+voxtype setup systemd   # Install as systemd service</code></pre>
 
         <h3>WhisperWriter</h3>
         <pre><code>git clone https://github.com/savbell/whisper-writer
@@ -132,15 +142,19 @@ key = "rightctrl"
 mode = "toggle"
 
 [audio.feedback]
-enabled = true</code></pre>
+enabled = true
+
+[text]
+spoken_punctuation = true
+replacements = { "javascript" = "JavaScript" }</code></pre>
 
         <h3>WhisperWriter: GUI settings</h3>
         <p>PyQt5 settings window for configuration. Visual, but requires the app running.</p>
 
         <div class="verdict-box">
             <h3>Which to Choose?</h3>
-            <p><strong>Choose Voxtype if:</strong> You use Linux with Wayland, prefer lightweight daemons, and want systemd integration.</p>
-            <p><strong>Choose WhisperWriter if:</strong> You use Windows/macOS, want a GUI for configuration, or need the OpenAI API option.</p>
+            <p><strong>Choose Voxtype if:</strong> You use Linux with Wayland, want GPU acceleration (Vulkan for AMD, CUDA for NVIDIA), text processing features, and prefer lightweight systemd daemons.</p>
+            <p><strong>Choose WhisperWriter if:</strong> You use Windows/macOS, want a GUI for configuration, or need the OpenAI API fallback option.</p>
             <h4>Cross-Platform Users</h4>
             <p>Consider using WhisperWriter on Windows/Mac and Voxtype on Linux for the best of both worlds.</p>
         </div>

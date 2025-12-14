@@ -80,6 +80,16 @@
                 <td>Low</td>
                 <td><strong>High (Docker, LocalAI)</strong></td>
             </tr>
+            <tr>
+                <td>GPU Acceleration</td>
+                <td><strong>Vulkan, CUDA, Metal, ROCm</strong></td>
+                <td>Via LocalAI</td>
+            </tr>
+            <tr>
+                <td>Text Processing</td>
+                <td><strong>Word replacements, spoken punctuation</strong></td>
+                <td>None</td>
+            </tr>
         </table>
 
         <h2>Critical Differences</h2>
@@ -91,7 +101,8 @@
         <h3>Setup Complexity</h3>
         <p><strong>Voxtype</strong> setup:</p>
         <pre><code>paru -S voxtype
-voxtype setup --download
+voxtype setup model
+voxtype setup systemd
 systemctl --user enable --now voxtype</code></pre>
 
         <p><strong>VoxInput</strong> setup:</p>
@@ -129,6 +140,8 @@ cd VoxInput && go build -o voxinput
             <li><strong>Simple setup</strong> - No Docker, no API server, no manual model installation</li>
             <li><strong>Self-contained</strong> - Single binary with embedded transcription</li>
             <li><strong>Lower resource usage</strong> - No separate API server running</li>
+            <li><strong>GPU acceleration</strong> - Vulkan, CUDA, Metal, ROCm for fast transcription</li>
+            <li><strong>Text processing</strong> - Word replacements and spoken punctuation</li>
             <li><strong>Built-in hotkeys</strong> - No WM configuration required</li>
             <li><strong>Audio feedback</strong> - Know when you're recording</li>
             <li><strong>Waybar integration</strong> - Status indicator built-in</li>

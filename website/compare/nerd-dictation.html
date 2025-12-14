@@ -75,6 +75,16 @@
                 <td>Audio + Notifications</td>
                 <td><strong>None</strong></td>
             </tr>
+            <tr>
+                <td>GPU Acceleration</td>
+                <td>Vulkan, CUDA, Metal, ROCm</td>
+                <td>No</td>
+            </tr>
+            <tr>
+                <td>Text Processing</td>
+                <td>Word replacements, spoken punctuation</td>
+                <td>Python callbacks</td>
+            </tr>
         </table>
 
         <h2>Critical Differences</h2>
@@ -101,12 +111,12 @@
 
         <h3>Voxtype</h3>
         <pre><code># Install
-curl -LO https://github.com/peteonrails/voxtype/releases/download/v0.1.2/voxtype_0.1.2-1_amd64.deb
-sudo dpkg -i voxtype_0.1.2-1_amd64.deb
+curl -LO https://github.com/peteonrails/voxtype/releases/download/v0.2.1/voxtype_0.2.1-1_amd64.deb
+sudo dpkg -i voxtype_0.2.1-1_amd64.deb
 
-# Download model and start
-voxtype setup --download
-systemctl --user enable --now voxtype</code></pre>
+# Interactive model selection and systemd setup
+voxtype setup model
+voxtype setup systemd</code></pre>
         <p>Time to first transcription: ~5 minutes</p>
 
         <h3>Nerd-dictation</h3>
@@ -158,20 +168,30 @@ mode = "toggle"  # or "push_to_talk"
 
 [audio.feedback]
 enabled = true
-theme = "subtle"</code></pre>
+theme = "subtle"
+
+[text]
+# Say "period" to get ".", "open paren" for "(", etc.
+spoken_punctuation = true
+
+# Custom word replacements
+[text.replacements]
+hyperwhisper = "hyprwhspr"
+javascript = "JavaScript"</code></pre>
 
         <h3>Nerd-dictation</h3>
-        <p>Python callbacks let you transform text:</p>
+        <p>Python callbacks let you transform text with full programming logic:</p>
         <pre><code>def process_text(text):
+    # Arbitrary Python transformations
     text = text.replace("period", ".")
     text = text.replace("new line", "\n")
     return text.capitalize()</code></pre>
 
         <div class="verdict-box">
             <h3>The Verdict</h3>
-            <p><strong>Choose Voxtype</strong> if you want the best accuracy available, use Wayland, and prefer tools that just work out of the box.</p>
-            <p><strong>Choose Nerd-dictation</strong> if you want to customize text processing with Python, prefer minimal footprint, or enjoy tinkering.</p>
-            <p>Many users keep both installed: Voxtype for daily dictation, Nerd-dictation for workflows needing text transformation.</p>
+            <p><strong>Choose Voxtype</strong> if you want the best accuracy, GPU acceleration, built-in text processing (spoken punctuation, word replacements), and prefer tools that just work.</p>
+            <p><strong>Choose Nerd-dictation</strong> if you need arbitrary Python transformations, prefer minimal footprint, or enjoy tinkering.</p>
+            <p>Voxtype now includes built-in text processing that covers most common use cases without needing Python code.</p>
         </div>
 
         <h2>Links</h2>

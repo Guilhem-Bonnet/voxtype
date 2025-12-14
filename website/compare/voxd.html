@@ -80,6 +80,16 @@
                 <td>No (optional)</td>
                 <td>No</td>
             </tr>
+            <tr>
+                <td>GPU Acceleration</td>
+                <td><strong>Vulkan, CUDA, Metal, ROCm</strong></td>
+                <td>No</td>
+            </tr>
+            <tr>
+                <td>Text Processing</td>
+                <td><strong>Word replacements, spoken punctuation</strong></td>
+                <td>AI Post-Processing (LLM)</td>
+            </tr>
         </table>
 
         <h2>Critical Differences</h2>
@@ -101,7 +111,8 @@
         <h3>Setup Experience</h3>
         <p><strong>Voxtype</strong> setup is minimal:</p>
         <pre><code>paru -S voxtype
-voxtype setup --download
+voxtype setup model
+voxtype setup systemd
 systemctl --user enable --now voxtype</code></pre>
 
         <p><strong>VOXD</strong> has an interactive first-run setup:</p>
@@ -133,7 +144,8 @@ voxd
             <li><strong>Simplicity</strong> - One binary, one config file, one systemd service</li>
             <li><strong>Predictable output</strong> - No AI surprises; what Whisper hears is what you get</li>
             <li><strong>Resource efficiency</strong> - Rust binary vs Python + PyQt6</li>
-            <li><strong>GPU acceleration</strong> - Vulkan, CUDA, Metal, ROCm support</li>
+            <li><strong>GPU acceleration</strong> - Vulkan, CUDA, Metal, ROCm support for fast transcription</li>
+            <li><strong>Text processing</strong> - Word replacements and spoken punctuation built-in</li>
             <li><strong>Waybar integration</strong> - Native status module for tiling WM users</li>
             <li><strong>Customizable audio feedback</strong> - Multiple themes, custom sounds</li>
         </ul>

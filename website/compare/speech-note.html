@@ -65,6 +65,16 @@
                 <td>Audio + Notifications</td>
                 <td>Visual (in-app only)</td>
             </tr>
+            <tr>
+                <td>GPU Acceleration</td>
+                <td>Vulkan, CUDA, Metal, ROCm</td>
+                <td>No</td>
+            </tr>
+            <tr>
+                <td>Text Processing</td>
+                <td>Word replacements, spoken punctuation</td>
+                <td>No</td>
+            </tr>
         </table>
 
         <h2>Critical Differences</h2>
@@ -151,9 +161,10 @@
         <h2>Installation</h2>
 
         <h3>Voxtype</h3>
-        <pre><code>curl -LO https://github.com/peteonrails/voxtype/releases/download/v0.1.2/voxtype_0.1.2-1_amd64.deb
-sudo dpkg -i voxtype_0.1.2-1_amd64.deb
-voxtype setup --download
+        <pre><code>curl -LO https://github.com/peteonrails/voxtype/releases/download/v0.2.1/voxtype_0.2.1-1_amd64.deb
+sudo dpkg -i voxtype_0.2.1-1_amd64.deb
+voxtype setup model
+voxtype setup systemd
 systemctl --user enable --now voxtype</code></pre>
 
         <h3>Speech Note</h3>
