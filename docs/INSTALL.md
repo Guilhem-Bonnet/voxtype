@@ -24,18 +24,20 @@ This guide covers all methods for installing Voxtype on Linux systems.
 
 ### Supported Platforms
 
-- **Linux** with Wayland compositor (GNOME, KDE Plasma, Sway, Hyprland, etc.)
+- **Linux** with any desktop environment (GNOME, KDE Plasma, Sway, Hyprland, i3, etc.)
+- Optimized for Wayland, works on X11 too
 - Architectures: x86_64, aarch64
 
 ### Runtime Dependencies
 
 | Component | Required | Purpose |
 |-----------|----------|---------|
-| Wayland compositor | Yes | Display server |
+| Linux desktop | Yes | Wayland or X11 |
 | PipeWire or PulseAudio | Yes | Audio capture |
 | `input` group membership | Yes | Hotkey detection via evdev |
-| ydotool | Recommended | Keyboard simulation for typing output |
-| wl-clipboard | Recommended | Clipboard fallback |
+| wtype | Recommended | Keyboard simulation on Wayland (best CJK support) |
+| ydotool | Recommended | Keyboard simulation on X11 (or Wayland fallback) |
+| wl-clipboard | Recommended | Clipboard fallback on Wayland |
 | libnotify | Optional | Desktop notifications |
 
 ### Build Dependencies (source builds only)
@@ -67,7 +69,7 @@ Build with GPU support using: `cargo build --release --features gpu-vulkan`
 
 ```bash
 # Install dependencies, build, and setup (Arch)
-sudo pacman -S --needed base-devel rust clang alsa-lib ydotool wl-clipboard && \
+sudo pacman -S --needed base-devel rust clang alsa-lib wtype wl-clipboard && \
 git clone https://github.com/peteonrails/voxtype && cd voxtype && \
 cargo build --release && \
 sudo cp target/release/voxtype /usr/local/bin/ && \
@@ -108,7 +110,9 @@ makepkg -si
 
 ```bash
 # Install recommended optional packages
-sudo pacman -S ydotool wl-clipboard libnotify
+sudo pacman -S wtype wl-clipboard libnotify
+# For X11 or as Wayland fallback:
+sudo pacman -S ydotool
 ```
 
 ---
@@ -149,7 +153,10 @@ sudo dpkg -i ../voxtype_0.1.0-1_*.deb
 #### Install recommended packages
 
 ```bash
-sudo apt install ydotool wl-clipboard libnotify-bin
+# For Wayland:
+sudo apt install wtype wl-clipboard libnotify-bin
+# For X11 or as fallback:
+sudo apt install ydotool
 ```
 
 ---
@@ -199,7 +206,10 @@ sudo dnf install ~/rpmbuild/RPMS/x86_64/voxtype-0.1.0-1.*.rpm
 #### Install recommended packages
 
 ```bash
-sudo dnf install ydotool wl-clipboard libnotify
+# For Wayland:
+sudo dnf install wtype wl-clipboard libnotify
+# For X11 or as fallback:
+sudo dnf install ydotool
 ```
 
 ---
@@ -286,19 +296,32 @@ sudo usermod -aG input $USER
 groups | grep input
 ```
 
-### 2. Enable ydotool daemon
+### 2. Install typing backend
 
-For keyboard simulation (typing output at cursor):
-
+**On Wayland (recommended):** Install wtype for best CJK/Unicode support
 ```bash
-# Enable and start the daemon
-systemctl --user enable --now ydotool
-
-# Verify it's running
-systemctl --user status ydotool
+# Fedora:
+sudo dnf install wtype
+# Arch:
+sudo pacman -S wtype
+# Ubuntu:
+sudo apt install wtype
 ```
 
-If ydotool isn't available, Voxtype will automatically fall back to clipboard output.
+**On X11:** Install and enable ydotool
+```bash
+# Fedora:
+sudo dnf install ydotool
+# Arch:
+sudo pacman -S ydotool
+# Ubuntu:
+sudo apt install ydotool
+
+# Enable and start the daemon
+systemctl --user enable --now ydotool
+```
+
+Voxtype uses wtype on Wayland (no daemon needed), ydotool on X11, and falls back to clipboard if neither is available.
 
 ### 3. Verify audio setup
 
@@ -403,7 +426,7 @@ voxtype setup
 This checks:
 - [x] User in `input` group
 - [x] Audio system accessible
-- [x] ydotool daemon running (optional)
+- [x] wtype or ydotool available (optional)
 - [x] Whisper model downloaded
 - [x] Configuration valid
 
@@ -473,7 +496,13 @@ sudo usermod -aG input $USER
 # Log out and back in
 ```
 
-**"ydotool daemon not running"**
+**Text not typing (Wayland)**
+```bash
+# Install wtype
+sudo pacman -S wtype  # or apt/dnf
+```
+
+**Text not typing (X11)**
 ```bash
 systemctl --user enable --now ydotool
 ```

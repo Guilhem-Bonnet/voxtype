@@ -52,7 +52,7 @@
             </tr>
             <tr>
                 <td>Platform</td>
-                <td>Linux (Wayland)</td>
+                <td>Linux (Wayland & X11)</td>
                 <td>Cross-platform</td>
             </tr>
             <tr>
@@ -80,12 +80,12 @@
         <h2>Platform Support</h2>
 
         <h3>Voxtype</h3>
-        <p><strong>Linux-only</strong>, Wayland-focused. Uses evdev for hotkey detection (works everywhere on Linux) and ydotool for text output (native Wayland support).</p>
+        <p><strong>Linux-only</strong>, optimized for Wayland but works on X11 too. Uses evdev for hotkey detection (works on any Linux desktop), wtype for text output on Wayland (with CJK support), and ydotool on X11.</p>
 
         <h3>WhisperWriter</h3>
         <p><strong>Cross-platform</strong> (Windows, Linux, macOS). Uses pynput for hotkeys and keyboard library for output. Wayland support has known issues.</p>
 
-        <p><strong>Wayland users:</strong> Voxtype has better Wayland support due to its evdev/ydotool architecture.</p>
+        <p><strong>Linux users:</strong> Voxtype has better Linux support due to its kernel-level evdev architecture. CJK character output works on Wayland via wtype.</p>
 
         <h2>Recording Modes</h2>
 
@@ -153,7 +153,7 @@ replacements = { "javascript" = "JavaScript" }</code></pre>
 
         <div class="verdict-box">
             <h3>Which to Choose?</h3>
-            <p><strong>Choose Voxtype if:</strong> You use Linux with Wayland, want GPU acceleration (Vulkan for AMD, CUDA for NVIDIA), text processing features, and prefer lightweight systemd daemons.</p>
+            <p><strong>Choose Voxtype if:</strong> You use Linux (Wayland or X11), want GPU acceleration (Vulkan for AMD, CUDA for NVIDIA), text processing features, CJK support, and prefer lightweight systemd daemons.</p>
             <p><strong>Choose WhisperWriter if:</strong> You use Windows/macOS, want a GUI for configuration, or need the OpenAI API fallback option.</p>
             <h4>Cross-Platform Users</h4>
             <p>Consider using WhisperWriter on Windows/Mac and Voxtype on Linux for the best of both worlds.</p>

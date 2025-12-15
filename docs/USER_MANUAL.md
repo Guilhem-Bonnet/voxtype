@@ -1,6 +1,6 @@
 # Voxtype User Manual
 
-Voxtype is a push-to-talk voice-to-text tool for Wayland Linux. This manual covers everything you need to know to use Voxtype effectively.
+Voxtype is a push-to-talk voice-to-text tool for Linux. Optimized for Wayland, works on X11 too. This manual covers everything you need to know to use Voxtype effectively.
 
 ## Table of Contents
 
@@ -166,7 +166,7 @@ translate = false
 
 [output]
 # Primary output mode
-# "type" - Simulates keyboard input at cursor (requires ydotool)
+# "type" - Simulates keyboard input at cursor (wtype on Wayland, ydotool on X11)
 # "clipboard" - Copies text to clipboard (requires wl-copy)
 mode = "type"
 
@@ -303,20 +303,31 @@ model = "/path/to/my/custom-model.bin"
 
 Simulates keyboard input, typing text directly at your cursor position.
 
-**Requires**: ydotool daemon running
-
+**On Wayland**: Uses wtype (recommended, best CJK/Unicode support)
 ```bash
-# Verify ydotool is working
-systemctl --user status ydotool
+# Install wtype
+# Fedora: sudo dnf install wtype
+# Arch: sudo pacman -S wtype
+# Ubuntu: sudo apt install wtype
+```
+
+**On X11**: Uses ydotool (requires daemon)
+```bash
+# Install and start ydotool
+# Fedora: sudo dnf install ydotool
+# Arch: sudo pacman -S ydotool
+# Ubuntu: sudo apt install ydotool
+systemctl --user enable --now ydotool
 ```
 
 **Pros**:
 - Text appears exactly where your cursor is
 - Works in any application
 - Most natural workflow
+- wtype supports CJK characters (Korean, Chinese, Japanese)
 
 **Cons**:
-- Requires ydotool
+- ydotool requires daemon and cannot output CJK characters
 - May be slow in some applications (increase `type_delay_ms`)
 
 ### Clipboard Mode
@@ -341,13 +352,15 @@ mode = "clipboard"
 
 ### Fallback Behavior
 
-By default, if typing fails, Voxtype falls back to clipboard:
+Voxtype uses a fallback chain: wtype → ydotool → clipboard
 
 ```toml
 [output]
 mode = "type"
-fallback_to_clipboard = true  # Falls back if ydotool isn't available
+fallback_to_clipboard = true  # Falls back to clipboard if typing fails
 ```
+
+On Wayland, wtype is tried first (best CJK support), then ydotool, then clipboard. On X11, ydotool is used, falling back to clipboard if unavailable.
 
 ---
 

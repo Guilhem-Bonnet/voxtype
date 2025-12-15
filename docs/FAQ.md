@@ -8,23 +8,24 @@ Common questions about Voxtype.
 
 ### What is Voxtype?
 
-Voxtype is a push-to-talk voice-to-text tool for Wayland Linux. You hold a hotkey, speak, release the key, and your speech is transcribed and either typed at your cursor position or copied to the clipboard.
+Voxtype is a push-to-talk voice-to-text tool for Linux. Optimized for Wayland, works on X11 too. You hold a hotkey, speak, release the key, and your speech is transcribed and either typed at your cursor position or copied to the clipboard.
 
 ### Why another voice-to-text tool?
 
 Most voice-to-text solutions for Linux either:
-- Only work on X11 (not Wayland)
 - Require internet/cloud services
-- Are compositor-specific
+- Are compositor or desktop-specific
+- Don't support CJK (Korean, Chinese, Japanese) characters
 
 Voxtype is designed to:
-- Work on **any** Wayland compositor
+- Work on **any Linux desktop** (Wayland or X11)
 - Be **fully offline** (uses local Whisper models)
 - Use the **push-to-talk** paradigm (more predictable than continuous listening)
+- Support **CJK characters** via wtype on Wayland
 
 ### Does it work on X11?
 
-Voxtype is designed primarily for Wayland, but it should work on X11 as well since it uses evdev (kernel-level) for hotkey detection and ydotool (uinput) for keyboard simulation.
+Yes! Voxtype works on both Wayland and X11. It uses evdev (kernel-level) for hotkey detection, which works everywhere. For text output, it uses wtype on Wayland (with CJK support) and ydotool on X11.
 
 ### Does it require an internet connection?
 
@@ -34,13 +35,14 @@ No. All speech recognition is done locally using whisper.cpp. The only time netw
 
 ## Compatibility
 
-### Which Wayland compositors are supported?
+### Which desktops are supported?
 
 All of them! Voxtype uses:
-- **evdev** for hotkey detection (kernel-level, compositor-independent)
-- **ydotool** for typing output (uinput, compositor-independent)
+- **evdev** for hotkey detection (kernel-level, works on Wayland and X11)
+- **wtype** for typing output on Wayland (best CJK support)
+- **ydotool** for typing output on X11 (or as Wayland fallback)
 
-Tested on: GNOME, KDE Plasma, Sway, Hyprland, river, and more.
+Tested on: GNOME, KDE Plasma, Sway, Hyprland, i3, and more.
 
 ### Which audio systems are supported?
 
@@ -131,9 +133,11 @@ Whisper automatically adds punctuation based on context. For explicit punctuatio
 
 Voxtype uses the Linux evdev subsystem to detect global hotkeys. This requires read access to `/dev/input/event*` devices, which is restricted to the `input` group for security reasons.
 
-### Why does it need ydotool?
+### Why does it need wtype/ydotool?
 
-Wayland doesn't provide a standard way for applications to simulate keyboard input (unlike X11's XTEST extension). ydotool uses the kernel's uinput interface, which works universally.
+Neither Wayland nor X11 provide a universal way for applications to simulate keyboard input. Voxtype uses:
+- **wtype** on Wayland - uses the virtual-keyboard protocol, supports CJK characters, no daemon needed
+- **ydotool** on X11 (or Wayland fallback) - uses the kernel's uinput interface, requires a daemon
 
 ### How much RAM does it use?
 
@@ -187,9 +191,16 @@ No. All processing happens locally on your machine. No audio or text is sent to 
 
 ### No text is typed
 
+**On Wayland:**
+1. Check wtype is installed: `which wtype`
+2. Test wtype directly: `wtype "test"`
+
+**On X11:**
 1. Check ydotool is running: `systemctl --user status ydotool`
 2. Test ydotool directly: `ydotool type "test"`
-3. Try clipboard mode: `voxtype --clipboard`
+
+**Fallback:**
+Try clipboard mode: `voxtype --clipboard`
 
 ### Transcription is inaccurate
 
