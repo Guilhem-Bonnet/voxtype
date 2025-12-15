@@ -1,8 +1,14 @@
 //! Text output module
 //!
-//! Provides text output via keyboard simulation (ydotool) or clipboard (wl-copy).
+//! Provides text output via keyboard simulation or clipboard.
+//!
+//! Fallback chain for `mode = "type"`:
+//! 1. wtype - Wayland-native, best Unicode/CJK support, no daemon needed
+//! 2. ydotool - Works on X11/Wayland/TTY, requires daemon
+//! 3. clipboard - Universal fallback via wl-copy
 
 pub mod clipboard;
+pub mod wtype;
 pub mod ydotool;
 
 use crate::config::OutputConfig;
@@ -27,13 +33,18 @@ pub fn create_output_chain(config: &OutputConfig) -> Vec<Box<dyn TextOutput>> {
 
     match config.mode {
         crate::config::OutputMode::Type => {
-            // Primary: ydotool for typing
-            chain.push(Box::new(ydotool::YdotoolOutput::new(
-                config.type_delay_ms,
+            // Primary: wtype for Wayland (best Unicode/CJK support, no daemon)
+            chain.push(Box::new(wtype::WtypeOutput::new(
                 config.notification.on_transcription,
             )));
 
-            // Fallback: clipboard (no notification since primary already handles it)
+            // Fallback: ydotool (works on X11/TTY, requires daemon)
+            chain.push(Box::new(ydotool::YdotoolOutput::new(
+                config.type_delay_ms,
+                false, // no notification, wtype handles it if available
+            )));
+
+            // Last resort: clipboard
             if config.fallback_to_clipboard {
                 chain.push(Box::new(clipboard::ClipboardOutput::new(false)));
             }
