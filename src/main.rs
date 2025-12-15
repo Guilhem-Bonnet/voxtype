@@ -1,4 +1,4 @@
-//! Voxtype - Push-to-talk voice-to-text for Wayland
+//! Voxtype - Push-to-talk voice-to-text for Linux
 //!
 //! Run with `voxtype` or `voxtype daemon` to start the daemon.
 //! Use `voxtype setup` to check dependencies and download models.
@@ -21,16 +21,17 @@ use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 #[command(name = "voxtype")]
-#[command(author, version, about = "Push-to-talk voice-to-text for Wayland")]
+#[command(author, version, about = "Push-to-talk voice-to-text for Linux")]
 #[command(long_about = "
-Voxtype is a push-to-talk voice-to-text tool for Wayland Linux systems.
+Voxtype is a push-to-talk voice-to-text tool for Linux.
+Optimized for Wayland, works on X11 too.
 Hold a hotkey to record, release to transcribe and output the text.
 
 SETUP:
   1. Add yourself to the input group: sudo usermod -aG input $USER
   2. Log out and back in
-  3. Start ydotool daemon: systemctl --user enable --now ydotool
-  4. Run: voxtype setup (to download whisper model)
+  3. Install wtype (Wayland) or ydotool (X11) for typing support
+  4. Run: voxtype setup (to check dependencies and download whisper model)
   5. Run: voxtype (to start the daemon)
 
 USAGE:
@@ -224,7 +225,7 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Config => {
-            show_config(&config)?;
+            show_config(&config).await?;
         }
 
         Commands::Status { follow, format } => {
@@ -449,7 +450,7 @@ fn format_state_json(state: &str) -> String {
 }
 
 /// Show current configuration
-fn show_config(config: &config::Config) -> anyhow::Result<()> {
+async fn show_config(config: &config::Config) -> anyhow::Result<()> {
     println!("Current Configuration\n");
     println!("=====================\n");
 
@@ -505,6 +506,10 @@ fn show_config(config: &config::Config) -> anyhow::Result<()> {
             println!("  (resolves to: {:?})", resolved);
         }
     }
+
+    // Show output chain status
+    let output_status = setup::detect_output_chain().await;
+    setup::print_output_chain_status(&output_status);
 
     println!("\n---");
     println!(

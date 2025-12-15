@@ -4,6 +4,7 @@
 //! - systemd service installation
 //! - Waybar configuration generation
 //! - Interactive model selection
+//! - Output chain detection
 
 pub mod model;
 pub mod systemd;
@@ -13,16 +14,44 @@ use crate::config::Config;
 use std::process::Stdio;
 use tokio::process::Command;
 
-/// Check if a command exists in PATH
-pub async fn command_exists(cmd: &str) -> bool {
-    Command::new("which")
-        .arg(cmd)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await
-        .map(|s| s.success())
-        .unwrap_or(false)
+/// Display server type
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DisplayServer {
+    Wayland,
+    X11,
+    Unknown,
+}
+
+impl std::fmt::Display for DisplayServer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DisplayServer::Wayland => write!(f, "Wayland"),
+            DisplayServer::X11 => write!(f, "X11"),
+            DisplayServer::Unknown => write!(f, "Unknown"),
+        }
+    }
+}
+
+/// Output tool status
+#[derive(Debug)]
+pub struct OutputToolStatus {
+    pub name: &'static str,
+    pub installed: bool,
+    pub available: bool,
+    pub path: Option<String>,
+    pub note: Option<String>,
+}
+
+/// Complete output chain status
+#[derive(Debug)]
+pub struct OutputChainStatus {
+    pub display_server: DisplayServer,
+    pub wtype: OutputToolStatus,
+    pub ydotool: OutputToolStatus,
+    pub ydotool_daemon: bool,
+    pub wl_copy: OutputToolStatus,
+    pub xclip: OutputToolStatus,
+    pub primary_method: Option<String>,
 }
 
 /// Check if user is in a specific group
@@ -53,6 +82,264 @@ pub fn print_failure(msg: &str) {
 /// Print an info message
 pub fn print_info(msg: &str) {
     println!("  \x1b[34mℹ\x1b[0m {}", msg);
+}
+
+/// Print a warning message
+pub fn print_warning(msg: &str) {
+    println!("  \x1b[33m⚠\x1b[0m {}", msg);
+}
+
+/// Detect the current display server
+pub fn detect_display_server() -> DisplayServer {
+    // Check for Wayland first
+    if std::env::var("WAYLAND_DISPLAY").is_ok() {
+        return DisplayServer::Wayland;
+    }
+    // Check for X11
+    if std::env::var("DISPLAY").is_ok() {
+        return DisplayServer::X11;
+    }
+    DisplayServer::Unknown
+}
+
+/// Get the path to a command if it exists
+pub async fn get_command_path(cmd: &str) -> Option<String> {
+    let output = Command::new("which")
+        .arg(cmd)
+        .output()
+        .await
+        .ok()?;
+
+    if output.status.success() {
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        None
+    }
+}
+
+/// Check if ydotool daemon is running
+pub async fn is_ydotool_daemon_running() -> bool {
+    // Try using systemctl first
+    let systemctl_check = Command::new("systemctl")
+        .args(["--user", "is-active", "ydotool"])
+        .output()
+        .await;
+
+    if let Ok(output) = systemctl_check {
+        if output.status.success() {
+            return true;
+        }
+    }
+
+    // Fallback: try a no-op ydotool command
+    Command::new("ydotool")
+        .args(["type", ""])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Detect the full output chain status
+pub async fn detect_output_chain() -> OutputChainStatus {
+    let display_server = detect_display_server();
+
+    // Check wtype
+    let wtype_path = get_command_path("wtype").await;
+    let wtype_installed = wtype_path.is_some();
+    let wtype_available = wtype_installed && display_server == DisplayServer::Wayland;
+    let wtype_note = if wtype_installed && display_server != DisplayServer::Wayland {
+        Some("Wayland only".to_string())
+    } else {
+        None
+    };
+
+    // Check ydotool
+    let ydotool_path = get_command_path("ydotool").await;
+    let ydotool_installed = ydotool_path.is_some();
+    let ydotool_daemon = if ydotool_installed {
+        is_ydotool_daemon_running().await
+    } else {
+        false
+    };
+    let ydotool_available = ydotool_installed && ydotool_daemon;
+    let ydotool_note = if ydotool_installed && !ydotool_daemon {
+        Some("daemon not running".to_string())
+    } else {
+        None
+    };
+
+    // Check wl-copy
+    let wl_copy_path = get_command_path("wl-copy").await;
+    let wl_copy_installed = wl_copy_path.is_some();
+    let wl_copy_available = wl_copy_installed && display_server == DisplayServer::Wayland;
+    let wl_copy_note = if wl_copy_installed && display_server != DisplayServer::Wayland {
+        Some("Wayland only".to_string())
+    } else {
+        None
+    };
+
+    // Check xclip
+    let xclip_path = get_command_path("xclip").await;
+    let xclip_installed = xclip_path.is_some();
+    let xclip_available = xclip_installed && display_server == DisplayServer::X11;
+    let xclip_note = if xclip_installed && display_server != DisplayServer::X11 {
+        Some("X11 only".to_string())
+    } else {
+        None
+    };
+
+    // Determine primary method
+    let primary_method = if wtype_available {
+        Some("wtype".to_string())
+    } else if ydotool_available {
+        Some("ydotool".to_string())
+    } else if wl_copy_available || xclip_available {
+        Some("clipboard".to_string())
+    } else {
+        None
+    };
+
+    OutputChainStatus {
+        display_server,
+        wtype: OutputToolStatus {
+            name: "wtype",
+            installed: wtype_installed,
+            available: wtype_available,
+            path: wtype_path,
+            note: wtype_note,
+        },
+        ydotool: OutputToolStatus {
+            name: "ydotool",
+            installed: ydotool_installed,
+            available: ydotool_available,
+            path: ydotool_path,
+            note: ydotool_note,
+        },
+        ydotool_daemon,
+        wl_copy: OutputToolStatus {
+            name: "wl-copy",
+            installed: wl_copy_installed,
+            available: wl_copy_available,
+            path: wl_copy_path,
+            note: wl_copy_note,
+        },
+        xclip: OutputToolStatus {
+            name: "xclip",
+            installed: xclip_installed,
+            available: xclip_available,
+            path: xclip_path,
+            note: xclip_note,
+        },
+        primary_method,
+    }
+}
+
+/// Print output chain status
+pub fn print_output_chain_status(status: &OutputChainStatus) {
+    println!("\nOutput Chain:");
+
+    // Display server
+    let ds_info = match status.display_server {
+        DisplayServer::Wayland => {
+            let display = std::env::var("WAYLAND_DISPLAY").unwrap_or_default();
+            format!("Wayland (WAYLAND_DISPLAY={})", display)
+        }
+        DisplayServer::X11 => {
+            let display = std::env::var("DISPLAY").unwrap_or_default();
+            format!("X11 (DISPLAY={})", display)
+        }
+        DisplayServer::Unknown => "Unknown (no WAYLAND_DISPLAY or DISPLAY set)".to_string(),
+    };
+    println!("  Display server:  {}", ds_info);
+
+    // wtype
+    print_tool_status(&status.wtype, status.display_server == DisplayServer::Wayland);
+
+    // ydotool
+    if status.ydotool.installed {
+        let daemon_status = if status.ydotool_daemon {
+            "\x1b[32mdaemon running\x1b[0m"
+        } else {
+            "\x1b[31mdaemon not running\x1b[0m"
+        };
+        if let Some(ref path) = status.ydotool.path {
+            if status.ydotool.available {
+                println!("  ydotool:         \x1b[32m✓\x1b[0m installed ({}), {}", path, daemon_status);
+            } else {
+                println!("  ydotool:         \x1b[33m⚠\x1b[0m installed ({}), {}", path, daemon_status);
+            }
+        }
+    } else {
+        println!("  ydotool:         \x1b[31m✗\x1b[0m not installed");
+    }
+
+    // wl-copy
+    print_tool_status(&status.wl_copy, status.display_server == DisplayServer::Wayland);
+
+    // xclip (only show on X11 or if installed)
+    if status.display_server == DisplayServer::X11 || status.xclip.installed {
+        print_tool_status(&status.xclip, status.display_server == DisplayServer::X11);
+    }
+
+    // Summary
+    println!();
+    if let Some(ref method) = status.primary_method {
+        let method_desc = match method.as_str() {
+            "wtype" => "wtype (CJK supported)",
+            "ydotool" => "ydotool (CJK not supported)",
+            "clipboard" => "clipboard (requires manual paste)",
+            _ => method.as_str(),
+        };
+        println!("  \x1b[32m→\x1b[0m Text will be typed via {}", method_desc);
+    } else {
+        println!("  \x1b[31m→\x1b[0m No text output method available!");
+        println!("    Install wtype (Wayland) or ydotool (X11) for typing support");
+    }
+}
+
+fn print_tool_status(tool: &OutputToolStatus, is_relevant: bool) {
+    if tool.installed {
+        let path = tool.path.as_deref().unwrap_or("?");
+        let note = tool.note.as_deref().map(|n| format!(" ({})", n)).unwrap_or_default();
+
+        if tool.available {
+            println!("  {}:{}  \x1b[32m✓\x1b[0m installed ({}){}",
+                tool.name,
+                " ".repeat(14 - tool.name.len()),
+                path,
+                note
+            );
+        } else if is_relevant {
+            println!("  {}:{}  \x1b[33m⚠\x1b[0m installed ({}){}",
+                tool.name,
+                " ".repeat(14 - tool.name.len()),
+                path,
+                note
+            );
+        } else {
+            println!("  {}:{}  \x1b[90m✓ installed ({}){}\x1b[0m",
+                tool.name,
+                " ".repeat(14 - tool.name.len()),
+                path,
+                note
+            );
+        }
+    } else {
+        if is_relevant {
+            println!("  {}:{}  \x1b[31m✗\x1b[0m not installed",
+                tool.name,
+                " ".repeat(14 - tool.name.len())
+            );
+        } else {
+            println!("  {}:{}  \x1b[90m- not installed\x1b[0m",
+                tool.name,
+                " ".repeat(14 - tool.name.len())
+            );
+        }
+    }
 }
 
 /// Run the basic setup checks (existing functionality)
@@ -93,36 +380,29 @@ pub async fn run_basic_setup(config: &Config, download: bool) -> anyhow::Result<
         all_ok = false;
     }
 
-    // Check ydotool
-    println!("\nChecking ydotool...");
-    if command_exists("ydotool").await {
-        print_success("ydotool found");
+    // Check output chain
+    let output_status = detect_output_chain().await;
+    print_output_chain_status(&output_status);
 
-        // Check daemon
-        let daemon_check = Command::new("systemctl")
-            .args(["--user", "is-active", "ydotool"])
-            .output()
-            .await?;
-        if daemon_check.status.success() {
-            print_success("ydotool daemon running");
+    // Determine if output setup is OK
+    if output_status.primary_method.is_none() {
+        all_ok = false;
+    } else if output_status.primary_method.as_deref() == Some("clipboard") {
+        print_warning("Only clipboard mode available - typing won't work");
+        if output_status.display_server == DisplayServer::Wayland {
+            println!("    Install wtype: sudo dnf/apt/pacman install wtype");
         } else {
-            print_failure("ydotool daemon not running");
-            println!("    Run: systemctl --user enable --now ydotool");
-            all_ok = false;
+            println!("    Install ydotool: sudo dnf/apt/pacman install ydotool");
+            println!("    Then run: systemctl --user enable --now ydotool");
         }
-    } else {
-        print_failure("ydotool not found (typing won't work, will use clipboard)");
-        println!("    Install via your package manager");
     }
 
-    // Check wl-copy
-    println!("\nChecking wl-clipboard...");
-    if command_exists("wl-copy").await {
-        print_success("wl-copy found");
-    } else {
-        print_failure("wl-copy not found");
-        println!("    Install wl-clipboard via your package manager");
-        all_ok = false;
+    // Provide specific advice for missing tools
+    if output_status.display_server == DisplayServer::Wayland && !output_status.wtype.installed {
+        print_info("Tip: Install wtype for best CJK/Unicode support on Wayland");
+    }
+    if output_status.ydotool.installed && !output_status.ydotool_daemon {
+        print_info("Start ydotool daemon: systemctl --user enable --now ydotool");
     }
 
     // Check whisper model
