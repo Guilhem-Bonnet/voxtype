@@ -105,6 +105,12 @@
     padding: var(--space-xl);
 }
 
+.rec-card.highlight {
+    border-color: var(--color-primary);
+    background: rgba(88, 166, 255, 0.05);
+    box-shadow: 0 0 0 1px rgba(88, 166, 255, 0.2);
+}
+
 .rec-icon {
     width: 48px;
     height: 48px;
