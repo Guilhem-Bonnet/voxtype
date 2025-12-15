@@ -26,6 +26,7 @@ fn generate_service_file() -> String {
         r#"[Unit]
 Description=Voxtype push-to-talk voice-to-text daemon
 Documentation=https://voxtype.io
+PartOf=graphical-session.target
 After=graphical-session.target
 
 [Service]
@@ -38,7 +39,7 @@ RestartSec=5
 Environment=XDG_RUNTIME_DIR=%t
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target
 "#
     )
 }

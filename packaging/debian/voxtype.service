@@ -1,7 +1,8 @@
 [Unit]
 Description=Voxtype push-to-talk voice-to-text daemon
 Documentation=man:voxtype(1)
-After=pipewire.service pipewire-pulse.service
+PartOf=graphical-session.target
+After=graphical-session.target pipewire.service pipewire-pulse.service
 Wants=ydotool.service
 
 [Service]
@@ -14,4 +15,4 @@ RestartSec=5
 # Before enabling this service, run: voxtype setup --download
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target
