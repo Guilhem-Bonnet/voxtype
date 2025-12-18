@@ -1,6 +1,6 @@
 Name:           voxtype
-Version:        0.3.3
-Release:        2%{?dist}
+Version:        0.4.0
+Release:        1%{?dist}
 Summary:        Push-to-talk voice-to-text for Linux
 
 License:        MIT
@@ -194,6 +194,13 @@ rm -f %{_bindir}/voxtype
 %{_datadir}/fish/vendor_completions.d/voxtype.fish
 
 %changelog
+* Wed Dec 18 2025 Peter Jackson <pete@peteonrails.com> - 0.4.0-1
+- Add compositor keybinding support via 'voxtype record' command
+- Add hotkey.enabled config option to disable built-in evdev hotkey
+- Add 'voxtype setup waybar --install/--uninstall' for automated waybar integration
+- Signal-based IPC (SIGUSR1/SIGUSR2) for external recording control
+- Users can now use Hyprland/Sway keybindings without input group membership
+
 * Wed Dec 18 2025 Peter Jackson <pete@peteonrails.com> - 0.3.3-2
 - Fix SIGILL crash on CPUs without AVX-512 support (Issue #4)
 - Root cause: Rust std library was generating AVX-512 instructions
