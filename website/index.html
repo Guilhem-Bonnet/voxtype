@@ -645,29 +645,11 @@ sudo cp target/release/voxtype /usr/local/bin/</code></pre>
                 <h3>Quick Start</h3>
 
                 <div class="setup-tabs">
-                    <button class="setup-tab-btn active" data-setup="standard">Standard Setup</button>
-                    <button class="setup-tab-btn" data-setup="hyprland">Hyprland / Sway</button>
+                    <button class="setup-tab-btn active" data-setup="hyprland">Hyprland / Sway</button>
+                    <button class="setup-tab-btn" data-setup="standard">Standard Setup</button>
                 </div>
 
-                <div id="setup-standard" class="setup-content active">
-                    <p class="setup-note">For GNOME, KDE, and other desktops. Uses kernel-level hotkey detection.</p>
-                    <div class="code-block">
-                        <pre><code><span class="comment"># Add user to input group (required for hotkey detection)</span>
-sudo usermod -aG input $USER
-<span class="comment"># Log out and back in for group change to take effect</span>
-
-<span class="comment"># Download whisper model and configure</span>
-voxtype setup --download
-
-<span class="comment"># Install as systemd service (starts on login)</span>
-voxtype setup systemd
-
-<span class="comment"># Check status</span>
-systemctl --user status voxtype</code></pre>
-                    </div>
-                </div>
-
-                <div id="setup-hyprland" class="setup-content">
+                <div id="setup-hyprland" class="setup-content active">
                     <p class="setup-note">For Hyprland and Sway users. Uses native compositor keybindings—no <code>input</code> group required!</p>
                     <div class="code-block">
                         <pre><code><span class="comment"># Download whisper model and configure</span>
@@ -702,6 +684,24 @@ bindr = , SCROLL_LOCK, exec, voxtype record stop</code></pre>
                         <pre><code><span class="comment"># Push-to-talk: hold $mod+v to record, release to transcribe</span>
 bindsym $mod+v exec voxtype record start
 bindsym --release $mod+v exec voxtype record stop</code></pre>
+                    </div>
+                </div>
+
+                <div id="setup-standard" class="setup-content">
+                    <p class="setup-note">For GNOME, KDE, and other desktops. Uses kernel-level hotkey detection.</p>
+                    <div class="code-block">
+                        <pre><code><span class="comment"># Add user to input group (required for hotkey detection)</span>
+sudo usermod -aG input $USER
+<span class="comment"># Log out and back in for group change to take effect</span>
+
+<span class="comment"># Download whisper model and configure</span>
+voxtype setup --download
+
+<span class="comment"># Install as systemd service (starts on login)</span>
+voxtype setup systemd
+
+<span class="comment"># Check status</span>
+systemctl --user status voxtype</code></pre>
                     </div>
                 </div>
             </div>
