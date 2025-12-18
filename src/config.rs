@@ -302,6 +302,8 @@ pub enum OutputMode {
     Type,
     /// Copy to clipboard (requires wl-copy)
     Clipboard,
+    /// Copy to clipboard then paste with Ctrl+V (requires wl-copy and ydotool)
+    Paste,
 }
 
 fn default_true() -> bool {
@@ -440,6 +442,7 @@ pub fn load_config(path: Option<&Path>) -> Result<Config, VoxtypeError> {
     if let Ok(mode) = std::env::var("VOXTYPE_OUTPUT_MODE") {
         config.output.mode = match mode.to_lowercase().as_str() {
             "clipboard" => OutputMode::Clipboard,
+            "paste" => OutputMode::Paste,
             _ => OutputMode::Type,
         };
     }

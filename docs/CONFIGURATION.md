@@ -335,12 +335,16 @@ Primary output method.
 **Values:**
 - `type` - Simulate keyboard input at cursor position (requires ydotool)
 - `clipboard` - Copy text to clipboard (requires wl-copy)
+- `paste` - Copy to clipboard then paste with Ctrl+V (requires wl-copy and ydotool)
 
 **Example:**
 ```toml
 [output]
-mode = "clipboard"
+mode = "paste"
 ```
+
+**Note about paste mode:**
+The `paste` mode is designed to work around non-US keyboard layout issues. Instead of typing characters directly (which assumes US keyboard layout), it copies text to the clipboard and then simulates Ctrl+V to paste it. This works regardless of keyboard layout but requires both wl-copy (for clipboard access) and ydotool (for Ctrl+V simulation).
 
 ### fallback_to_clipboard
 
@@ -349,6 +353,8 @@ mode = "clipboard"
 **Required:** No
 
 When `true` and `mode = "type"`, falls back to clipboard if typing fails.
+
+**Note:** This setting has no effect when `mode = "paste"` since paste mode doesn't use fallback behavior.
 
 **Example:**
 ```toml
@@ -564,6 +570,7 @@ Most configuration options can be overridden via command line:
 | hotkey.key | `--hotkey` |
 | whisper.model | `--model` |
 | output.mode = "clipboard" | `--clipboard` |
+| output.mode = "paste" | `--paste` |
 | Verbosity | `-v`, `-vv`, `-q` |
 
 **Example:**
