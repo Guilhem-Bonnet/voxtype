@@ -183,6 +183,12 @@ Setup subcommands:
   voxtype setup systemd      Install/manage systemd user service
   voxtype setup waybar       Generate Waybar module configuration
   voxtype setup model        Interactive model selection and download
+  voxtype setup gpu          Manage GPU acceleration (switch CPU/Vulkan)
+
+Status options:
+  voxtype status --format json      Output as JSON (for Waybar)
+  voxtype status --follow           Continuously output on state changes
+  voxtype status --extended         Include model, device, backend in JSON
 
 Options:
   -c, --config <FILE>  Path to config file
@@ -354,6 +360,37 @@ First, enable the state file in your voxtype config:
 
 ```toml
 state_file = "auto"
+```
+
+### Extended Status Info
+
+Use `--extended` to include model, device, and backend in the JSON output:
+
+```bash
+voxtype status --format json --extended
+```
+
+Output:
+```json
+{
+  "text": "🎙️",
+  "class": "idle",
+  "tooltip": "Voxtype ready\nModel: base.en\nDevice: default\nBackend: CPU (AVX-512)",
+  "model": "base.en",
+  "device": "default",
+  "backend": "CPU (AVX-512)"
+}
+```
+
+Waybar config with model display:
+```json
+"custom/voxtype": {
+    "exec": "voxtype status --follow --format json --extended",
+    "return-type": "json",
+    "format": "{} [{}]",
+    "format-alt": "{model}",
+    "tooltip": true
+}
 ```
 
 ## Troubleshooting
