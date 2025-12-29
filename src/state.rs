@@ -76,8 +76,9 @@ impl std::fmt::Display for State {
                 write!(f, "Transcribing ({:.1}s of audio)", duration)
             }
             State::Outputting { text } => {
-                let preview = if text.len() > 20 {
-                    format!("{}...", &text[..20])
+                // Use chars() to handle multi-byte UTF-8 characters
+                let preview = if text.chars().count() > 20 {
+                    format!("{}...", text.chars().take(20).collect::<String>())
                 } else {
                     text.clone()
                 };

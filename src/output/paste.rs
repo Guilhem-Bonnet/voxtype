@@ -28,9 +28,9 @@ impl PasteOutput {
 
     /// Send a desktop notification
     async fn send_notification(&self, text: &str) {
-        // Truncate preview for notification
-        let preview = if text.len() > 80 {
-            format!("{}...", &text[..80])
+        // Truncate preview for notification (use chars() to handle multi-byte UTF-8)
+        let preview = if text.chars().count() > 80 {
+            format!("{}...", text.chars().take(80).collect::<String>())
         } else {
             text.to_string()
         };
