@@ -24,12 +24,7 @@ Hold a hotkey (default: ScrollLock) while speaking, release to transcribe and ou
 # 1. Build
 cargo build --release
 
-# 2. One-time setup
-sudo usermod -aG input $USER
-# Log out and back in
-
-# 3. Install typing backend
-# For Wayland (recommended):
+# 2. Install typing backend (Wayland)
 # Fedora:
 sudo dnf install wtype
 # Arch:
@@ -37,22 +32,46 @@ sudo pacman -S wtype
 # Ubuntu:
 sudo apt install wtype
 
-# For X11 (or as fallback):
-# Fedora:
-sudo dnf install ydotool
-# Arch:
-sudo pacman -S ydotool
-# Ubuntu:
-sudo apt install ydotool
-# Then start the daemon:
-systemctl --user enable --now ydotool
-
-# 4. Download whisper model
+# 3. Download whisper model
 ./target/release/voxtype setup --download
+
+# 4. Add keybinding to your compositor
+# See "Compositor Keybindings" section below
 
 # 5. Run
 ./target/release/voxtype
 ```
+
+### Compositor Keybindings
+
+Voxtype works best with your compositor's native keybindings. Add these to your compositor config:
+
+**Hyprland** (`~/.config/hypr/hyprland.conf`):
+```
+bind = SUPER, V, exec, voxtype record start
+bindr = SUPER, V, exec, voxtype record stop
+```
+
+**Sway** (`~/.config/sway/config`):
+```
+bindsym --no-repeat $mod+v exec voxtype record start
+bindsym --release $mod+v exec voxtype record stop
+```
+
+**River** (`~/.config/river/init`):
+```bash
+riverctl map normal Super V spawn 'voxtype record start'
+riverctl map -release normal Super V spawn 'voxtype record stop'
+```
+
+Then disable the built-in hotkey in your config:
+```toml
+# ~/.config/voxtype/config.toml
+[hotkey]
+enabled = false
+```
+
+> **X11 / Built-in hotkey fallback:** If you're on X11 or prefer voxtype's built-in hotkey (ScrollLock by default), add yourself to the `input` group: `sudo usermod -aG input $USER` and log out/in. See the [User Manual](docs/USER_MANUAL.md) for details.
 
 ## Usage
 
@@ -317,7 +336,8 @@ Results vary by hardware. Example on AMD RX 6800:
 
 ### Permissions
 
-- User must be in the `input` group (for evdev access)
+- **Wayland compositors:** No special permissions needed when using compositor keybindings
+- **Built-in hotkey / X11:** User must be in the `input` group (for evdev access)
 
 ### Installing Dependencies
 
@@ -409,8 +429,12 @@ Waybar config with model display:
 
 ### "Cannot open input device" error
 
-Add your user to the input group:
+This only affects the built-in evdev hotkey. You have two options:
 
+**Option 1: Use compositor keybindings (recommended)**
+Configure your compositor to call `voxtype record start/stop` and disable the built-in hotkey. See "Compositor Keybindings" above.
+
+**Option 2: Add yourself to the input group**
 ```bash
 sudo usermod -aG input $USER
 # Log out and back in
@@ -470,7 +494,9 @@ type_delay_ms = 10
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Why evdev?** Neither Wayland nor X11 provide a standard way to capture global hotkeys that works everywhere. Using evdev (the Linux input subsystem) works on all desktops but requires the user to be in the `input` group.
+**Why compositor keybindings?** Wayland compositors like Hyprland, Sway, and River support key-release events, enabling push-to-talk without special permissions. Voxtype's `record start/stop` commands integrate directly with your compositor's keybinding system.
+
+**Fallback: evdev hotkey.** For X11 or compositors without key-release support, voxtype includes a built-in hotkey using evdev (the Linux input subsystem). This requires the user to be in the `input` group.
 
 **Why wtype + ydotool?** On Wayland, wtype uses the virtual-keyboard protocol for text input, with excellent Unicode/CJK support and no daemon required. On X11 (or as a fallback), ydotool uses uinput for text injection. This combination ensures Voxtype works on any Linux desktop.
 
