@@ -4,7 +4,18 @@
 # All settings can be overridden via CLI flags
 
 [hotkey]
-# Key to hold for push-to-talk
+# Built-in hotkey using evdev (Linux input subsystem)
+#
+# Most users should leave this disabled and use compositor keybindings instead:
+#   - Hyprland: bind/bindr in hyprland.conf
+#   - Sway: bindsym --no-repeat/--release in config
+#   - River: riverctl map / map -release
+#
+# Enable this if you're on X11, using a compositor without key-release support,
+# or prefer a dedicated key like ScrollLock. Requires 'input' group membership.
+enabled = false
+
+# Key to hold for push-to-talk (when enabled = true)
 # Common choices: SCROLLLOCK, PAUSE, RIGHTALT, F13-F24
 # Use `evtest` to find key names for your keyboard
 key = "SCROLLLOCK"
