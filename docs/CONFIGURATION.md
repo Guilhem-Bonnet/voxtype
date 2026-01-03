@@ -467,6 +467,105 @@ type_delay_ms = 10  # 10ms delay between characters
 
 ---
 
+## [output.post_process]
+
+Optional post-processing command that runs after transcription. The command receives
+the transcribed text on stdin and should output the processed text on stdout.
+
+**Common use cases:**
+- LLM-based text cleanup (grammar, punctuation, filler word removal)
+- Custom text transformations via shell commands
+- Integration with local AI services (Ollama, llama.cpp, LM Studio)
+
+### command
+
+**Type:** String
+**Default:** None (disabled)
+**Required:** Yes (if section is present)
+
+The shell command to execute. Text is piped to stdin, processed text read from stdout.
+
+**Examples:**
+```toml
+# Use Ollama with a small model for quick cleanup
+[output.post_process]
+command = "ollama run llama3.2:1b 'Clean up this transcription. Fix grammar and remove filler words. Output only the cleaned text:'"
+
+# Simple filler word removal with sed
+[output.post_process]
+command = "sed 's/\\bum\\b//g; s/\\buh\\b//g; s/\\blike\\b//g'"
+
+# Custom Python script
+[output.post_process]
+command = "python3 ~/.config/voxtype/cleanup.py"
+
+# LM Studio API (OpenAI-compatible)
+[output.post_process]
+command = "~/.config/voxtype/lm-studio-cleanup.sh"
+```
+
+### timeout_ms
+
+**Type:** Integer
+**Default:** `30000` (30 seconds)
+**Required:** No
+
+Maximum time in milliseconds to wait for the command to complete. If exceeded,
+the original text is used and a warning is logged.
+
+**Recommendations:**
+- Simple shell commands: `5000` (5 seconds)
+- Local LLMs: `30000-60000` (30-60 seconds)
+- Remote APIs: `30000` or higher
+
+**Example:**
+```toml
+[output.post_process]
+command = "ollama run llama3.2:1b 'Clean up:'"
+timeout_ms = 45000  # 45 second timeout for LLM
+```
+
+### Error Handling
+
+If the post-processing command fails for any reason (command not found, non-zero
+exit, timeout, empty output), Voxtype gracefully falls back to the original
+transcribed text and logs a warning. This ensures voice-to-text output is never
+blocked by post-processing issues.
+
+**Debugging:**
+Run voxtype with `-v` or `-vv` to see detailed logs about post-processing:
+```bash
+voxtype -vv
+```
+
+### Example LM Studio Script
+
+For users running LM Studio locally, here's an example script:
+
+```bash
+#!/bin/bash
+# ~/.config/voxtype/lm-studio-cleanup.sh
+
+INPUT=$(cat)
+
+curl -s http://localhost:1234/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"messages\": [{
+      \"role\": \"system\",
+      \"content\": \"Clean up this dictated text. Fix spelling, remove filler words (um, uh), add proper punctuation. Output ONLY the cleaned text, nothing else.\"
+    },{
+      \"role\": \"user\",
+      \"content\": \"$INPUT\"
+    }],
+    \"temperature\": 0.1
+  }" | jq -r '.choices[0].message.content'
+```
+
+Make it executable: `chmod +x ~/.config/voxtype/lm-studio-cleanup.sh`
+
+---
+
 ## [text]
 
 Controls text post-processing after transcription.
