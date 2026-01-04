@@ -609,6 +609,14 @@ command = "~/.config/voxtype/cleanup.sh"
 timeout_ms = 45000
 ```
 
+**Swedish Chef mode (for fun):**
+```toml
+[output.post_process]
+command = "/path/to/swedish-chef.sh"
+timeout_ms = 1000
+```
+See `examples/swedish-chef.sh` for a script that transforms your dictation into Swedish Chef speak. Bork bork bork!
+
 ### LM Studio Script Example
 
 For users running LM Studio locally:
