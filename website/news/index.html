@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Voxtype news and updates. Development progress, new features, and announcements for the Linux voice-to-text tool.">
+    <meta name="keywords" content="voxtype, linux voice to text, speech recognition, wayland, whisper, updates, changelog">
+    <title>News & Updates | Voxtype</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/news.css">
+    <link rel="icon" type="image/svg+xml" href="../images/favicon.svg">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="../" class="nav-logo">
+                <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+                <span>Voxtype</span>
+            </a>
+            <div class="nav-links">
+                <a href="../#features">Features</a>
+                <a href="../#demo">Demo</a>
+                <a href="../#install">Install</a>
+                <a href="../compare/">Compare</a>
+                <a href="./" class="active">News</a>
+                <a href="https://github.com/peteonrails/voxtype/tree/main/docs">Docs</a>
+                <a href="https://github.com/peteonrails/voxtype" class="nav-github">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                    GitHub
+                </a>
+            </div>
+            <button class="nav-toggle" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <header class="news-hero">
+        <div class="container">
+            <h1>News & Updates</h1>
+            <p class="hero-subtitle">
+                Development progress, feature announcements, and behind-the-scenes updates on Voxtype.
+            </p>
+        </div>
+    </header>
+
+    <!-- News Articles -->
+    <main class="news-content">
+        <div class="container">
+
+            <!-- v0.4.x Era Posts -->
+
+            <article class="news-article" id="post-process-llm">
+                <div class="article-meta">
+                    <time datetime="2025-01">January 2025</time>
+                    <span class="article-tag">New Feature</span>
+                </div>
+                <h2>Post-Processing Command: LLM Integration</h2>
+                <div class="article-body">
+                    <p>Voice-to-text tools give you what you said. But what if you want what you <em>meant</em>?</p>
+
+                    <p>I just shipped post-processing support in Voxtype. You can now pipe transcriptions through any external command before they reach your cursor.</p>
+
+                    <p>The obvious use case: LLM cleanup. Run your transcription through Claude or Ollama to fix grammar, expand shorthand, or translate technical jargon into prose.</p>
+
+                    <div class="code-block">
+                        <div class="code-header"><span>config.toml</span></div>
+                        <pre><code>[output]
+post_process_command = "ollama run llama3.2 'Fix grammar and punctuation, output only the corrected text:'"</code></pre>
+                    </div>
+
+                    <p>But the feature is intentionally generic. Any command that reads stdin and writes stdout works:</p>
+
+                    <ul>
+                        <li>Spell correction with aspell</li>
+                        <li>Profanity filtering</li>
+                        <li>Text expansion macros</li>
+                        <li>Custom formatting scripts</li>
+                    </ul>
+
+                    <p>I also shipped a Swedish Chef filter as a proof-of-concept. Because sometimes you need to bork bork bork.</p>
+
+                    <p>The design philosophy: Voxtype handles voice-to-text well. LLMs handle text transformation well. Let each tool do what it's good at.</p>
+                </div>
+            </article>
+
+            <article class="news-article" id="compositor-keybindings">
+                <div class="article-meta">
+                    <time datetime="2025-01">January 2025</time>
+                    <span class="article-tag">Architecture</span>
+                </div>
+                <h2>No More Input Group: Compositor Keybindings</h2>
+                <div class="article-body">
+                    <p>When I launched Voxtype, you needed to add yourself to the <code>input</code> group to use global hotkeys. This required root access, a logout, and felt like a security compromise.</p>
+
+                    <p>That's no longer the default.</p>
+
+                    <p>The new recommended approach: use your compositor's native keybindings to run <code>voxtype record-toggle</code>. No special permissions needed.</p>
+
+                    <div class="code-block">
+                        <div class="code-header"><span>Hyprland</span></div>
+                        <pre><code>bind = , F9, exec, voxtype record-toggle</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header"><span>Sway</span></div>
+                        <pre><code>bindsym F9 exec voxtype record-toggle</code></pre>
+                    </div>
+
+                    <p>The evdev hotkey system is still there for users who need it (some setups, some edge cases), but it's now opt-in rather than the default.</p>
+
+                    <p>This also means Voxtype works immediately after install for most tiling WM users. No group membership, no logout, no root.</p>
+                </div>
+            </article>
+
+            <article class="news-article" id="river-support">
+                <div class="article-meta">
+                    <time datetime="2025-01">January 2025</time>
+                    <span class="article-tag">Compatibility</span>
+                </div>
+                <h2>River Compositor Support</h2>
+                <div class="article-body">
+                    <p>Voxtype started as "for Hyprland and Sway users." That was a practical choice&mdash;those are the compositors I use.</p>
+
+                    <p>But the architecture was always compositor-agnostic. evdev doesn't care what's drawing your windows.</p>
+
+                    <p>v0.4 adds official River support. River is a dynamic tiling Wayland compositor that's been gaining traction, and users were asking for documentation.</p>
+
+                    <div class="code-block">
+                        <div class="code-header"><span>River (~/.config/river/init)</span></div>
+                        <pre><code>riverctl map normal None F9 spawn "voxtype record-toggle"</code></pre>
+                    </div>
+
+                    <p>If you're using a different Wayland compositor and want support added, open an issue. The code probably already works&mdash;it's just documentation and testing.</p>
+                </div>
+            </article>
+
+            <article class="news-article" id="waybar-setup">
+                <div class="article-meta">
+                    <time datetime="2025-01">January 2025</time>
+                    <span class="article-tag">DX</span>
+                </div>
+                <h2>One-Command Waybar Setup</h2>
+                <div class="article-body">
+                    <p>The most common question I get about Voxtype: "How do I add the Waybar module?"</p>
+
+                    <p>Previously, this meant manually editing your Waybar config, adding CSS classes, and figuring out the JSON format.</p>
+
+                    <p>Now:</p>
+
+                    <div class="code-block">
+                        <pre><code>voxtype setup waybar --install</code></pre>
+                    </div>
+
+                    <p>That's it. The command adds the module to your config, includes sensible CSS, and backs up your existing files first.</p>
+
+                    <p>To remove it:</p>
+
+                    <div class="code-block">
+                        <pre><code>voxtype setup waybar --uninstall</code></pre>
+                    </div>
+
+                    <p>Sometimes the best feature is removing a manual step.</p>
+                </div>
+            </article>
+
+            <article class="news-article" id="vulkan-zen3">
+                <div class="article-meta">
+                    <time datetime="2025-01">January 2025</time>
+                    <span class="article-tag">Bug Fix</span>
+                </div>
+                <h2>v0.4.2: GPU Acceleration on More Hardware</h2>
+                <div class="article-body">
+                    <p>A user reported that GPU acceleration caused Voxtype to crash on their Ryzen 5950X. Same SIGILL error we fixed for CPU-only mode months ago.</p>
+
+                    <p>The problem: whisper.cpp's Vulkan backend uses AVX-512 even when running on the GPU. My Zen 4 build machine has AVX-512. Their Zen 3 doesn't.</p>
+
+                    <p>The fix was surgical: build the Vulkan binary with <code>-mno-avx512f</code> to prevent those instructions from being emitted. Now GPU acceleration works on:</p>
+
+                    <ul>
+                        <li>Zen 3 (Ryzen 5000 series)</li>
+                        <li>Zen 4 (Ryzen 7000/9000 series)</li>
+                        <li>Intel 11th gen and newer</li>
+                        <li>Most discrete GPUs with Vulkan support</li>
+                    </ul>
+
+                    <p>If you tried Vulkan mode before and it crashed, v0.4.2 should work.</p>
+                </div>
+            </article>
+
+            <!-- v0.3.x Era Posts -->
+
+            <article class="news-article" id="device-hotplug">
+                <div class="article-meta">
+                    <time datetime="2024-12">December 2024</time>
+                    <span class="article-tag">Bug Fix</span>
+                </div>
+                <h2>Device Hotplug Fix (v0.3.2)</h2>
+                <div class="article-body">
+                    <p>I locked my screen, came back, and Voxtype stopped working. The service was running, no errors in the logs, but pressing the hotkey did nothing.</p>
+
+                    <p>Restarting the service fixed it. That's not a solution.</p>
+
+                    <p>The problem: Voxtype uses evdev to capture keyboard input at the kernel level. When you lock your screen on Hyprland (and probably other Wayland compositors), the compositor releases its grip on input devices. When you unlock, the devices get re-added to <code>/dev/input</code>. But Voxtype was still holding file descriptors to the old device nodes&mdash;handles that now pointed to nothing.</p>
+
+                    <p>The fix was inotify. Voxtype now watches <code>/dev/input</code> for device changes. When devices are added or removed, it validates its existing handles by checking <code>/proc/self/fd/</code> to see if they still point to real devices. If not, it re-enumerates.</p>
+
+                    <p>There's a 150ms debounce because USB devices don't enumerate instantly. And it clears modifier state on device changes so you don't end up with phantom stuck keys.</p>
+
+                    <p>This is the kind of bug that only shows up in real usage. Unit tests don't lock your screen. I found it because I use the tool every day.</p>
+                </div>
+            </article>
+
+            <article class="news-article" id="external-contributors">
+                <div class="article-meta">
+                    <time datetime="2024-12">December 2024</time>
+                    <span class="article-tag">Community</span>
+                </div>
+                <h2>First External Contributors</h2>
+                <div class="article-body">
+                    <p>When you build something solo, you get used to making all the decisions yourself. Then someone opens a PR and suddenly you're reviewing code you didn't write.</p>
+
+                    <p>Mate Remias contributed three features to Voxtype in a single day:</p>
+
+                    <ul>
+                        <li>Paste output mode for apps that don't work with virtual keyboards</li>
+                        <li>On-demand model loading to reduce memory usage</li>
+                        <li>Build script fixes for users compiling on different distros</li>
+                    </ul>
+
+                    <p>Jean-Paul van Tillo contributed the initial GPU acceleration work that made Vulkan and CUDA support possible.</p>
+
+                    <p>Going from solo project to something with external contributors feels like a milestone. Thanks to both of them.</p>
+                </div>
+            </article>
+
+            <article class="news-article" id="avx512-fix">
+                <div class="article-meta">
+                    <time datetime="2024-12">December 2024</time>
+                    <span class="article-tag">Bug Fix</span>
+                </div>
+                <h2>Community Contributions & AVX-512 Fix (v0.3.1)</h2>
+                <div class="article-body">
+                    <p>A user reported that Voxtype crashed immediately on their Ryzen 9 5950X. The error: SIGILL (illegal instruction). They couldn't even run <code>voxtype --version</code>.</p>
+
+                    <p>I build on a Ryzen 9 9900X3D, which has AVX-512. Their Zen 3 chip doesn't. Simple enough&mdash;I was shipping binaries with instructions their CPU couldn't execute.</p>
+
+                    <p>My first fix didn't work. I passed <code>WHISPER_NO_AVX512=ON</code> to the build, created separate AVX2 and AVX-512 binaries, and shipped a new release. The user tried it: still crashed.</p>
+
+                    <p>They ran sha512sum on both binaries. Identical. I had shipped the same binary twice with different names.</p>
+
+                    <p>The whisper.cpp version I'm using doesn't actually respect that flag. CMake's auto-detection finds AVX-512 on <em>my</em> build machine and enables it regardless. The flag gets passed, logged, and ignored.</p>
+
+                    <p>The fix was to go lower: compiler flags. <code>-mno-avx512f</code> tells the compiler itself to never emit those instructions. Now the binaries are actually different.</p>
+
+                    <p>This release also includes work from Mate Remias, who contributed three PRs in one day: paste output mode, on-demand model loading, and build script fixes.</p>
+                </div>
+            </article>
+
+            <article class="news-article" id="cjk-support">
+                <div class="article-meta">
+                    <time datetime="2024-12">December 2024</time>
+                    <span class="article-tag">New Feature</span>
+                </div>
+                <h2>CJK Support (v0.3.0)</h2>
+                <div class="article-body">
+                    <p>One of my first users of Voxtype reported that Korean speech-to-text wasn't working. They saw garbled output or a vague message to the effect of "korean isn't supported yet" (&#54620;&#44397;&#50612;&#45716; &#51648;&#50896;&#46104;&#51648; &#50506;&#49845;&#45768;&#45796;)</p>
+
+                    <p>I spent a while debugging this. Whisper transcribed Korean fine&mdash;and indeed, something in the model was detecting Korean speech, so it couldn't be the model.</p>
+
+                    <p>The problem was ydotool, which I had selected for injecting keyboard input based on speech transcription. It simulates keystrokes, which works great until you need actual Unicode support.</p>
+
+                    <p>Here's the thing: I had looked at every other Linux voice-to-text tool I could find before I decided to build Voxtype. They all use ydotool or xdotool, which is why I selected it for my project.</p>
+
+                    <p>None of them are going to handle Korean, Chinese, or Japanese properly either.</p>
+
+                    <p>I built VoxType with a pluggable output module structure. So, solving this problem for my user was as simple as implementing <code>wtype</code>, which injects text directly instead of faking keystrokes. As far as I've been able to find, my project is the only speech-to-text tool using it for output right now.</p>
+
+                    <p>I wasn't trying to corner the CJK market: I was just fixing a bug. But I'm genuinely not aware of another local voice-to-text tool on Linux that handles these languages correctly. If you know of one, tell me&mdash;I'd like to see how they solved it.</p>
+
+                    <p>In the meantime, if you are a Linux user who wants speech to text, speaks Korean, Chinese, or Japanese, I think I've got the tool for you.</p>
+                </div>
+            </article>
+
+            <article class="news-article" id="gpu-acceleration">
+                <div class="article-meta">
+                    <time datetime="2024-12">December 2024</time>
+                    <span class="article-tag">New Feature</span>
+                </div>
+                <h2>GPU Acceleration & Multilingual Support</h2>
+                <div class="article-body">
+                    <p>I spent a couple hours today adding 1) GPU acceleration and 2) multilingual support to Voxtype.</p>
+
+                    <p>With GPU acceleration, the Whisper large-v3 model is within reach for most users, and that means better, more accurate transcription with multilingual and translation support. You can "speak French, type English" or "speak Korean, type Korean" with language auto-detection.</p>
+
+                    <p>This work was supported by my first two external contributors!</p>
+                </div>
+            </article>
+
+            <!-- Launch Post -->
+
+            <article class="news-article" id="initial-launch">
+                <div class="article-meta">
+                    <time datetime="2024-11">November 2024</time>
+                    <span class="article-tag">Launch</span>
+                </div>
+                <h2>Initial Launch</h2>
+                <div class="article-body">
+                    <p>I've spent years contributing to open source projects, but it's been a long time since I built and shipped a complete piece of software solo.</p>
+
+                    <p>This Thanksgiving, I built voxtype, a push-to-talk voice transcription tool for Linux.</p>
+
+                    <p>macOS and Windows have had solid voice typing for years, and even Google Docs has it built in. But on Linux, especially on Wayland, the options are limited. Most solutions are cloud-based, X11-only, or tied to specific desktop environments.</p>
+
+                    <p>The few local options that exist are python-based. No shade to python, but requiring you to install pytorch, pytorchaudio, and a dozen other dependencies into a virtual environment, and remember to activate it every time you reboot is cumbersome. Vocalinux is pretty good but I got stuck in dependency hell trying to set it up, and I find it sluggish.</p>
+
+                    <p>I wanted something simpler. Install a package, download a model, enable a service, done.</p>
+
+                    <p>Voxtype is available from the AUR for Arch based systems, and as a .deb or .rpm package. Run a few commands post-install, enable the systemd user service and it just works every time you log in. No virtual environments, no dependency conflicts, no activation scripts (well, except systemd).</p>
+
+                    <p>Hold a hotkey, speak, release, and your words appear at the cursor. It uses Whisper locally through whisper.cpp, so everything stays on your machine. Voxtype makes no network requests and uses no cloud transcription services.</p>
+
+                    <p>The interesting technical challenge was making it work across all Wayland compositors. Since Wayland's security model blocks the usual approaches for global hotkeys and input simulation, voxtype works at the kernel level using evdev and uinput. This means it runs the same on Sway, Hyprland, or any other compositor.</p>
+
+                    <p>It's a little "omakase" in that it's meant for Hyprland or Sway with Waybar. That's where you'll have the best experience. But it works on any compositor, and doesn't require Waybar.</p>
+
+                    <p>It works great for me, which, to be candid, is enough for me. If you find it useful or have constructive/helpful feedback, that's a bonus.</p>
+
+                    <p>It's MIT licensed: <a href="https://voxtype.io">https://voxtype.io</a></p>
+                </div>
+            </article>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <a href="../" class="footer-logo">
+                        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                            <line x1="12" y1="19" x2="12" y2="23"/>
+                            <line x1="8" y1="23" x2="16" y2="23"/>
+                        </svg>
+                        <span>Voxtype</span>
+                    </a>
+                    <p>Push-to-talk voice-to-text for Linux</p>
+                </div>
+
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Documentation</h4>
+                        <a href="https://github.com/peteonrails/voxtype/blob/main/docs/INSTALL.md">Installation</a>
+                        <a href="https://github.com/peteonrails/voxtype/blob/main/docs/USER_MANUAL.md">User Manual</a>
+                        <a href="https://github.com/peteonrails/voxtype/blob/main/docs/CONFIGURATION.md">Configuration</a>
+                        <a href="https://github.com/peteonrails/voxtype/blob/main/docs/WAYBAR.md">Waybar Integration</a>
+                        <a href="https://github.com/peteonrails/voxtype/blob/main/docs/FAQ.md">FAQ</a>
+                    </div>
+
+                    <div class="footer-column">
+                        <h4>Community</h4>
+                        <a href="https://github.com/peteonrails/voxtype">GitHub</a>
+                        <a href="https://github.com/peteonrails/voxtype/issues">Issues</a>
+                        <a href="https://github.com/peteonrails/voxtype/discussions">Discussions</a>
+                    </div>
+
+                    <div class="footer-column">
+                        <h4>Legal</h4>
+                        <a href="https://github.com/peteonrails/voxtype/blob/main/LICENSE">MIT License</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>&copy; 2024-2025 Voxtype. Open source under the MIT License.</p>
+                <p>Made with care by <a href="https://peterjackson.dev">Pete Jackson</a> with contributions from <a href="https://github.com/jvantillo">jvantillo</a> and <a href="https://github.com/materemias">materemias</a></p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="../js/main.js"></script>
+</body>
+</html>
