@@ -462,6 +462,34 @@ pub fn print_config() {
     println!("   killall waybar && waybar &\n");
 
     println!("---");
+    println!("\nCustomizing Icons:");
+    println!("------------------");
+    println!("Voxtype outputs an \"alt\" field in JSON that enables Waybar's format-icons feature.");
+    println!("To use custom icons (e.g., Nerd Fonts), configure your Waybar module like this:\n");
+    println!(r#"   "custom/voxtype": {{
+       "exec": "voxtype status --follow --format json",
+       "return-type": "json",
+       "format": "{{icon}}",
+       "format-icons": {{
+           "idle": "\uf130",
+           "recording": "\uf111",
+           "transcribing": "\uf110",
+           "stopped": "\uf131"
+       }},
+       "tooltip": true
+   }}"#);
+    println!("\n   Nerd Font codepoints: U+F130 (mic), U+F111 (dot), U+F110 (spinner), U+F131 (mic-slash)");
+    println!("\nAlternatively, configure icons in voxtype's config.toml:\n");
+    println!("   [status]");
+    println!("   icon_theme = \"nerd-font\"");
+    println!("\nBuilt-in themes:");
+    println!("  Font-based (require specific fonts):");
+    println!("    emoji (default), nerd-font, material, phosphor, codicons, omarchy");
+    println!("  Universal (no special fonts):");
+    println!("    minimal, dots, arrows, text");
+    println!("\nOr specify a path to a custom theme TOML file.\n");
+
+    println!("---");
     println!("\nFor more details, see: https://voxtype.io or docs/WAYBAR.md");
 }
 

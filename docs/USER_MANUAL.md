@@ -125,6 +125,7 @@ voxtype status                      # Basic status (text format)
 voxtype status --format json        # JSON output for Waybar
 voxtype status --follow             # Continuously output on state changes
 voxtype status --format json --extended  # Include model, device, backend
+voxtype status --format json --icon-theme nerd-font  # Use specific icon theme
 ```
 
 **Options:**
@@ -135,6 +136,7 @@ voxtype status --format json --extended  # Include model, device, backend
 | `--format json` | JSON output for status bars |
 | `--follow` | Watch for state changes and output continuously |
 | `--extended` | Include model, device, and backend in JSON output |
+| `--icon-theme THEME` | Override icon theme (emoji, nerd-font, material, etc.) |
 
 **Example JSON output with `--extended`:**
 ```json
@@ -813,10 +815,19 @@ Voxtype can display a status indicator in Waybar showing when push-to-talk is ac
 
 3. Add `"custom/voxtype"` to your modules list and restart Waybar.
 
-The module displays:
+The module displays (default emoji theme):
 - 🎙️ when idle (ready to record)
 - 🎤 when recording (hotkey held)
 - ⏳ when transcribing
+
+**Customizing icons:** Choose from 10 built-in themes or define your own:
+
+```toml
+[status]
+icon_theme = "nerd-font"  # or: material, phosphor, codicons, minimal, dots, arrows, text
+```
+
+Available themes include Nerd Font, Material Design Icons, Phosphor, VS Code Codicons, and several universal themes that don't require special fonts (minimal, dots, arrows, text).
 
 **Extended status info:** Use `--extended` to include model, device, and backend in the JSON output and tooltip:
 
@@ -829,7 +840,7 @@ The module displays:
 }
 ```
 
-See [WAYBAR.md](WAYBAR.md) for styling options, troubleshooting, and Polybar setup.
+See [WAYBAR.md](WAYBAR.md) for complete icon customization options, styling, and troubleshooting.
 
 ### With Polybar
 

@@ -661,6 +661,116 @@ claude = "Claude"
 
 ---
 
+## [status]
+
+Controls status display icons for Waybar and other tray integrations.
+
+### icon_theme
+
+**Type:** String
+**Default:** `"emoji"`
+**Required:** No
+
+The icon theme to use for status display. Determines which icons appear in Waybar and other integrations.
+
+**Built-in themes:**
+
+***Font-based themes*** (require specific fonts installed):
+
+| Theme | idle | recording | transcribing | stopped | Font Required |
+|-------|------|-----------|--------------|---------|---------------|
+| `emoji` | 🎙️ | 🎤 | ⏳ | (empty) | None (default) |
+| `nerd-font` | U+F130 | U+F111 | U+F110 | U+F131 | [Nerd Font](https://www.nerdfonts.com/) |
+| `material` | U+F036C | U+F040A | U+F04CE | U+F036D | [Material Design Icons](https://materialdesignicons.com/) |
+| `phosphor` | U+E43A | U+E438 | U+E225 | U+E43B | [Phosphor Icons](https://phosphoricons.com/) |
+| `codicons` | U+EB51 | U+EBFC | U+EB4C | U+EB52 | [Codicons](https://github.com/microsoft/vscode-codicons) |
+| `omarchy` | U+EC12 | U+EC1C | U+EC1C | U+EC12 | Omarchy font |
+
+***Universal themes*** (no special fonts required):
+
+| Theme | idle | recording | transcribing | stopped | Description |
+|-------|------|-----------|--------------|---------|-------------|
+| `minimal` | ○ | ● | ◐ | × | Simple Unicode circles |
+| `dots` | ◯ | ⬤ | ◔ | ◌ | Geometric shapes |
+| `arrows` | ▶ | ● | ↻ | ■ | Media player style |
+| `text` | [MIC] | [REC] | [...] | [OFF] | Plain text labels |
+
+**Icon codepoint reference:**
+
+| Theme | idle | recording | transcribing | stopped |
+|-------|------|-----------|--------------|---------|
+| `nerd-font` | microphone | circle | spinner | microphone-slash |
+| `material` | mdi-microphone | mdi-record | mdi-sync | mdi-microphone-off |
+| `phosphor` | ph-microphone | ph-record | ph-circle-notch | ph-microphone-slash |
+| `codicons` | codicon-mic | codicon-record | codicon-sync | codicon-mute |
+
+**Custom theme:** Specify a path to a TOML file containing custom icons.
+
+**Example:**
+```toml
+[status]
+icon_theme = "nerd-font"
+```
+
+**Custom theme file format** (`~/.config/voxtype/icons.toml`):
+```toml
+idle = "🎙️"
+recording = "🔴"
+transcribing = "⏳"
+stopped = ""
+```
+
+### [status.icons]
+
+Per-state icon overrides. These take precedence over the theme.
+
+**Type:** Table
+**Default:** Empty (use theme icons)
+**Required:** No
+
+Override specific icons without creating a full custom theme.
+
+**Example:**
+```toml
+[status]
+icon_theme = "emoji"
+
+[status.icons]
+recording = "🔴"  # Override just the recording icon
+```
+
+### Waybar Integration
+
+Voxtype outputs an `alt` field in JSON that enables Waybar's `format-icons` feature. You can either:
+
+1. **Use voxtype's icon themes** (simpler):
+   ```toml
+   [status]
+   icon_theme = "nerd-font"
+   ```
+
+2. **Override in Waybar config** (more control):
+   ```jsonc
+   "custom/voxtype": {
+       "exec": "voxtype status --follow --format json",
+       "return-type": "json",
+       "format": "{icon}",
+       "format-icons": {
+           "idle": "",
+           "recording": "",
+           "transcribing": "",
+           "stopped": ""
+       },
+       "tooltip": true
+   }
+   ```
+
+The `alt` field values match state names: `idle`, `recording`, `transcribing`, `stopped`.
+
+See [User Manual - Waybar Integration](USER_MANUAL.md#with-waybar-status-indicator) for complete setup instructions.
+
+---
+
 ## state_file
 
 **Type:** String
@@ -731,11 +841,13 @@ Most configuration options can be overridden via command line:
 | whisper.model | `--model` |
 | output.mode = "clipboard" | `--clipboard` |
 | output.mode = "paste" | `--paste` |
+| status.icon_theme | `--icon-theme` (status subcommand) |
 | Verbosity | `-v`, `-vv`, `-q` |
 
 **Example:**
 ```bash
 voxtype --hotkey PAUSE --model small.en --clipboard
+voxtype status --format json --icon-theme nerd-font
 ```
 
 ---

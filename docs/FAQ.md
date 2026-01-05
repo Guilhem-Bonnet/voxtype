@@ -128,6 +128,32 @@ voxtype transcribe recording.wav
 
 Whisper automatically adds punctuation based on context. For explicit punctuation, you can speak it (e.g., "period", "comma", "question mark").
 
+### Can I customize the Waybar/status bar icons?
+
+Yes! Voxtype supports 10 built-in icon themes plus custom icons. Configure in `~/.config/voxtype/config.toml`:
+
+```toml
+[status]
+icon_theme = "nerd-font"
+```
+
+**Available themes:**
+
+| Theme | Description | Requirements |
+|-------|-------------|--------------|
+| `emoji` | 🎙️ 🎤 ⏳ (default) | None |
+| `nerd-font` | Nerd Font icons | [Nerd Font](https://www.nerdfonts.com/) |
+| `material` | Material Design Icons | [MDI Font](https://materialdesignicons.com/) |
+| `phosphor` | Phosphor Icons | [Phosphor Font](https://phosphoricons.com/) |
+| `codicons` | VS Code icons | [Codicons](https://github.com/microsoft/vscode-codicons) |
+| `omarchy` | Omarchy distro icons | Omarchy font |
+| `minimal` | ○ ● ◐ × | None |
+| `dots` | ◯ ⬤ ◔ ◌ | None |
+| `arrows` | ▶ ● ↻ ■ | None |
+| `text` | [MIC] [REC] [...] [OFF] | None |
+
+You can also override individual icons or create custom theme files. See the [Waybar Integration Guide](WAYBAR.md#customizing-icons) for complete details.
+
 ---
 
 ## Technical

@@ -112,6 +112,10 @@ enum Commands {
         /// Include extended info in JSON (model, device, backend)
         #[arg(long)]
         extended: bool,
+
+        /// Icon theme for JSON output (emoji, nerd-font, material, phosphor, codicons, omarchy, minimal, dots, arrows, text, or path to custom theme)
+        #[arg(long, value_name = "THEME")]
+        icon_theme: Option<String>,
     },
 
     /// Control recording from external sources (compositor keybindings, scripts)
@@ -299,8 +303,8 @@ async fn main() -> anyhow::Result<()> {
             show_config(&config).await?;
         }
 
-        Commands::Status { follow, format, extended } => {
-            run_status(&config, follow, &format, extended).await?;
+        Commands::Status { follow, format, extended, icon_theme } => {
+            run_status(&config, follow, &format, extended, icon_theme).await?;
         }
 
         Commands::Record { action } => {
@@ -524,6 +528,7 @@ async fn run_status(
     follow: bool,
     format: &str,
     extended: bool,
+    icon_theme_override: Option<String>,
 ) -> anyhow::Result<()> {
     let state_file = config.resolve_state_file();
 
@@ -545,6 +550,15 @@ async fn run_status(
         None
     };
 
+    // Use CLI override if provided, otherwise use config
+    let icons = if let Some(ref theme) = icon_theme_override {
+        let mut status_config = config.status.clone();
+        status_config.icon_theme = theme.clone();
+        status_config.resolve_icons()
+    } else {
+        config.status.resolve_icons()
+    };
+
     if !follow {
         // One-shot: just read and print current state
         // First check if daemon is actually running to avoid stale state
@@ -556,7 +570,7 @@ async fn run_status(
         let state = state.trim();
 
         if format == "json" {
-            println!("{}", format_state_json(state, ext_info.as_ref()));
+            println!("{}", format_state_json(state, &icons, ext_info.as_ref()));
         } else {
             println!("{}", state);
         }
@@ -576,7 +590,7 @@ async fn run_status(
     };
     let state = state.trim();
     if format == "json" {
-        println!("{}", format_state_json(state, ext_info.as_ref()));
+        println!("{}", format_state_json(state, &icons, ext_info.as_ref()));
     } else {
         println!("{}", state);
     }
@@ -611,7 +625,7 @@ async fn run_status(
                     let new_state = new_state.trim().to_string();
                     if new_state != last_state {
                         if format == "json" {
-                            println!("{}", format_state_json(&new_state, ext_info.as_ref()));
+                            println!("{}", format_state_json(&new_state, &icons, ext_info.as_ref()));
                         } else {
                             println!("{}", new_state);
                         }
@@ -626,7 +640,7 @@ async fn run_status(
                 // Check if daemon stopped (file deleted or process died)
                 if (!state_path.exists() || !is_daemon_running()) && last_state != "stopped" {
                     if format == "json" {
-                        println!("{}", format_state_json("stopped", ext_info.as_ref()));
+                        println!("{}", format_state_json("stopped", &icons, ext_info.as_ref()));
                     } else {
                         println!("stopped");
                     }
@@ -643,14 +657,24 @@ async fn run_status(
 }
 
 /// Format state as JSON for Waybar consumption
-fn format_state_json(state: &str, extended: Option<&ExtendedStatusInfo>) -> String {
-    let (text, class, base_tooltip) = match state {
-        "recording" => ("🎤", "recording", "Recording..."),
-        "transcribing" => ("⏳", "transcribing", "Transcribing..."),
-        "idle" => ("🎙️", "idle", "Voxtype ready - hold hotkey to record"),
-        "stopped" => ("", "stopped", "Voxtype not running"),
-        _ => ("?", "unknown", "Unknown state"),
+/// The `alt` field enables Waybar's format-icons feature for custom icon mapping
+fn format_state_json(
+    state: &str,
+    icons: &config::ResolvedIcons,
+    extended: Option<&ExtendedStatusInfo>,
+) -> String {
+    let (text, base_tooltip) = match state {
+        "recording" => (&icons.recording, "Recording..."),
+        "transcribing" => (&icons.transcribing, "Transcribing..."),
+        "idle" => (&icons.idle, "Voxtype ready - hold hotkey to record"),
+        "stopped" => (&icons.stopped, "Voxtype not running"),
+        _ => (&icons.idle, "Unknown state"),
     };
+
+    // alt = state name (for Waybar format-icons mapping)
+    // class = state name (for CSS styling)
+    let alt = state;
+    let class = state;
 
     match extended {
         Some(info) => {
@@ -660,14 +684,14 @@ fn format_state_json(state: &str, extended: Option<&ExtendedStatusInfo>) -> Stri
                 base_tooltip, info.model, info.device, info.backend
             );
             format!(
-                r#"{{"text": "{}", "class": "{}", "tooltip": "{}", "model": "{}", "device": "{}", "backend": "{}"}}"#,
-                text, class, tooltip, info.model, info.device, info.backend
+                r#"{{"text": "{}", "alt": "{}", "class": "{}", "tooltip": "{}", "model": "{}", "device": "{}", "backend": "{}"}}"#,
+                text, alt, class, tooltip, info.model, info.device, info.backend
             )
         }
         None => {
             format!(
-                r#"{{"text": "{}", "class": "{}", "tooltip": "{}"}}"#,
-                text, class, base_tooltip
+                r#"{{"text": "{}", "alt": "{}", "class": "{}", "tooltip": "{}"}}"#,
+                text, alt, class, base_tooltip
             )
         }
     }
@@ -722,6 +746,12 @@ async fn show_config(config: &config::Config) -> anyhow::Result<()> {
         "  on_transcription = {}",
         config.output.notification.on_transcription
     );
+
+    println!("\n[status]");
+    println!("  icon_theme = {:?}", config.status.icon_theme);
+    let icons = config.status.resolve_icons();
+    println!("  (resolved icons: idle={:?} recording={:?} transcribing={:?} stopped={:?})",
+        icons.idle, icons.recording, icons.transcribing, icons.stopped);
 
     if let Some(ref state_file) = config.state_file {
         println!("\n[integration]");

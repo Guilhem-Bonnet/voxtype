@@ -3,6 +3,13 @@
 # Location: ~/.config/voxtype/config.toml
 # All settings can be overridden via CLI flags
 
+# State file for external integrations (Waybar, polybar, etc.)
+# Use "auto" for default location ($XDG_RUNTIME_DIR/voxtype/state),
+# a custom path, or "disabled" to turn off. The daemon writes state
+# ("idle", "recording", "transcribing") to this file whenever it changes.
+# Required for `voxtype record toggle` and `voxtype status` commands.
+state_file = "auto"
+
 [hotkey]
 # Built-in hotkey using evdev (Linux input subsystem)
 #
@@ -24,6 +31,11 @@ key = "SCROLLLOCK"
 # Example: modifiers = ["LEFTCTRL", "LEFTALT"]
 modifiers = []
 
+# Activation mode: "push_to_talk" or "toggle"
+# - push_to_talk: Hold hotkey to record, release to transcribe (default)
+# - toggle: Press hotkey once to start recording, press again to stop
+# mode = "push_to_talk"
+
 [audio]
 # Audio input device ("default" uses system default)
 # List devices with: pactl list sources short
@@ -35,9 +47,19 @@ sample_rate = 16000
 # Maximum recording duration in seconds (safety limit)
 max_duration_secs = 60
 
+# [audio.feedback]
+# Enable audio feedback sounds (beeps when recording starts/stops)
+# enabled = true
+#
+# Sound theme: "default", "subtle", "mechanical", or path to custom theme directory
+# theme = "default"
+#
+# Volume level (0.0 to 1.0)
+# volume = 0.7
+
 [whisper]
 # Model to use for transcription
-# Options: tiny, tiny.en, base, base.en, small, small.en, medium, medium.en, large-v3
+# Options: tiny, tiny.en, base, base.en, small, small.en, medium, medium.en, large-v3, large-v3-turbo
 # .en models are English-only but faster and more accurate for English
 # Or provide absolute path to a custom .bin model file
 model = "base.en"
@@ -82,8 +104,45 @@ on_recording_stop = false
 # Show notification with transcribed text after transcription completes
 on_transcription = true
 
-# State file for external integrations (Waybar, polybar, etc.)
-# Uncomment to enable. Use "auto" for default location ($XDG_RUNTIME_DIR/voxtype/state)
-# or provide a custom path. The daemon writes state ("idle", "recording", "transcribing")
-# to this file whenever it changes. See USER_MANUAL.md for Waybar setup instructions.
-# state_file = "auto"
+# [output.post_process]
+# Pipe transcribed text through an external command for cleanup before output.
+# The command receives text on stdin and outputs processed text on stdout.
+# Useful for LLM-based text cleanup, grammar correction, filler word removal.
+# On any failure (timeout, error), falls back to original transcription.
+#
+# command = "ollama run llama3.2:1b 'Clean up this dictation. Fix grammar, remove filler words. Output only the cleaned text:'"
+# timeout_ms = 30000  # 30 second timeout (generous for LLM)
+
+# [text]
+# Text processing options (word replacements, spoken punctuation)
+#
+# Enable spoken punctuation conversion (e.g., say "period" to get ".")
+# spoken_punctuation = false
+#
+# Custom word replacements (case-insensitive)
+# replacements = { "hyperwhisper" = "hyprwhspr" }
+
+# [status]
+# Status display icons for Waybar/tray integrations
+#
+# Icon theme (or path to custom theme file):
+#   Font-based (require specific fonts):
+#     - "emoji"     - Default emoji icons (🎙️ 🎤 ⏳)
+#     - "nerd-font" - Nerd Font icons (requires Nerd Font)
+#     - "material"  - Material Design Icons (requires MDI font)
+#     - "phosphor"  - Phosphor Icons (requires Phosphor font)
+#     - "codicons"  - VS Code icons (requires Codicons font)
+#     - "omarchy"   - Omarchy distro icons
+#   Universal (no special fonts needed):
+#     - "minimal"   - Simple Unicode (○ ● ◐ ×)
+#     - "dots"      - Geometric shapes (◯ ⬤ ◔ ◌)
+#     - "arrows"    - Media player style (▶ ● ↻ ■)
+#     - "text"      - Plain text ([MIC] [REC] [...] [OFF])
+# icon_theme = "emoji"
+#
+# Per-state icon overrides (optional, takes precedence over theme)
+# [status.icons]
+# idle = "🎙️"
+# recording = "🎤"
+# transcribing = "⏳"
+# stopped = ""

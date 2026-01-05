@@ -6,11 +6,14 @@ This guide shows how to add a Voxtype status indicator to Waybar, so you can see
 
 The Waybar module displays an icon that changes based on Voxtype's current state:
 
-| State | Icon | Meaning |
-|-------|------|---------|
+| State | Default Icon | Meaning |
+|-------|--------------|---------|
 | Idle | 🎙️ | Ready to record |
 | Recording | 🎤 | Hotkey held, capturing audio |
 | Transcribing | ⏳ | Processing speech to text |
+| Stopped | (empty) | Voxtype not running |
+
+Icons are fully customizable—choose from 10 built-in themes (emoji, Nerd Font, Material Design, etc.) or define your own. See [Customizing Icons](#customizing-icons) below.
 
 This is useful if you:
 - Prefer visual feedback over desktop notifications
@@ -155,6 +158,130 @@ Add these styles to your Waybar stylesheet (`~/.config/waybar/style.css`) to mak
 This makes the icon:
 - Turn red and pulse when recording
 - Turn yellow when transcribing
+
+## Customizing Icons
+
+Voxtype supports multiple icon themes and custom icons. You can customize icons either through Voxtype's config or directly in your Waybar config.
+
+### Option 1: Use Voxtype Icon Themes (Simplest)
+
+Add to your `~/.config/voxtype/config.toml`:
+
+```toml
+[status]
+icon_theme = "nerd-font"
+```
+
+Or use the `--icon-theme` CLI flag (useful for testing or Waybar config):
+
+```bash
+voxtype status --format json --icon-theme nerd-font
+```
+
+**Available themes:**
+
+| Theme | idle | recording | transcribing | stopped | Requirements |
+|-------|------|-----------|--------------|---------|--------------|
+| `emoji` | 🎙️ | 🎤 | ⏳ | (empty) | None (default) |
+| `nerd-font` | U+F130 | U+F111 | U+F110 | U+F131 | Nerd Font |
+| `material` | U+F036C | U+F040A | U+F04CE | U+F036D | Material Design Icons |
+| `phosphor` | U+E43A | U+E438 | U+E225 | U+E43B | Phosphor Icons |
+| `codicons` | U+EB51 | U+EBFC | U+EB4C | U+EB52 | VS Code Codicons |
+| `omarchy` | U+EC12 | U+EC1C | U+EC1C | U+EC12 | Omarchy font |
+| `minimal` | ○ | ● | ◐ | × | None |
+| `dots` | ◯ | ⬤ | ◔ | ◌ | None |
+| `arrows` | ▶ | ● | ↻ | ■ | None |
+| `text` | [MIC] | [REC] | [...] | [OFF] | None |
+
+After changing the theme, restart the Voxtype daemon:
+
+```bash
+systemctl --user restart voxtype
+```
+
+### Option 2: Use Waybar's format-icons (More Control)
+
+Voxtype outputs an `alt` field in JSON that enables Waybar's native `format-icons` feature. This lets you define icons directly in your Waybar config:
+
+```json
+"custom/voxtype": {
+    "exec": "voxtype status --follow --format json",
+    "return-type": "json",
+    "format": "{icon}",
+    "format-icons": {
+        "idle": "",
+        "recording": "",
+        "transcribing": "",
+        "stopped": ""
+    },
+    "tooltip": true
+}
+```
+
+The `alt` field values are: `idle`, `recording`, `transcribing`, `stopped`.
+
+**Nerd Font example:**
+```json
+"format-icons": {
+    "idle": "\uf130",
+    "recording": "\uf111",
+    "transcribing": "\uf110",
+    "stopped": "\uf131"
+}
+```
+
+**Material Design Icons example:**
+```json
+"format-icons": {
+    "idle": "\U000f036c",
+    "recording": "\U000f040a",
+    "transcribing": "\U000f04ce",
+    "stopped": "\U000f036d"
+}
+```
+
+### Option 3: Override Specific Icons
+
+You can override individual icons without changing the whole theme:
+
+```toml
+[status]
+icon_theme = "emoji"
+
+[status.icons]
+recording = "🔴"  # Just change the recording icon
+```
+
+### Option 4: Custom Theme File
+
+Create a custom theme file (e.g., `~/.config/voxtype/icons.toml`):
+
+```toml
+idle = "🟢"
+recording = "🔴"
+transcribing = "🟡"
+stopped = "⚪"
+```
+
+Then reference it in your config:
+
+```toml
+[status]
+icon_theme = "~/.config/voxtype/icons.toml"
+```
+
+### Icon Reference Table
+
+| Theme | Icon Name | Codepoint | Description |
+|-------|-----------|-----------|-------------|
+| `nerd-font` | nf-fa-microphone | U+F130 | Microphone (idle) |
+| `nerd-font` | nf-fa-circle | U+F111 | Filled circle (recording) |
+| `nerd-font` | nf-fa-spinner | U+F110 | Spinner (transcribing) |
+| `nerd-font` | nf-fa-microphone-slash | U+F131 | Muted mic (stopped) |
+| `material` | mdi-microphone | U+F036C | Microphone (idle) |
+| `material` | mdi-record | U+F040A | Record dot (recording) |
+| `material` | mdi-sync | U+F04CE | Sync spinner (transcribing) |
+| `material` | mdi-microphone-off | U+F036D | Muted mic (stopped) |
 
 ## Alternative: Polling Mode
 
