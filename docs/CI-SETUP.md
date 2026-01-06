@@ -1,10 +1,10 @@
-# CI Build Setup for TrueNAS SCALE
+# CI Build Setup
 
-This guide explains how to set up automated builds on TrueNAS SCALE (or any Docker-capable host) to produce voxtype binaries without AVX-512 instructions.
+This guide explains how to set up automated builds on any Docker-capable host to produce voxtype binaries without AVX-512 instructions.
 
-## Why Build on TrueNAS?
+## Why Build on a Non-AVX-512 Machine?
 
-The i9-9900K (Coffee Lake) processor has AVX2 but **not** AVX-512. Building on this machine ensures:
+Building on a machine **without** AVX-512 (e.g., Intel 9th gen, AMD Zen 3 or earlier) ensures:
 
 - No AVX-512 instructions leak from auto-vectorization
 - Binaries work on older CPUs (Zen 3, Haswell, etc.)
@@ -12,7 +12,7 @@ The i9-9900K (Coffee Lake) processor has AVX2 but **not** AVX-512. Building on t
 
 ## Quick Start
 
-1. Clone the repository on your TrueNAS SCALE machine:
+1. Clone the repository on your build machine:
    ```bash
    git clone https://github.com/peteonrails/voxtype.git
    cd voxtype
@@ -75,12 +75,12 @@ Create `scripts/webhooks.json`:
 
 Then trigger builds with:
 ```bash
-curl -X POST http://your-truenas:9000/hooks/build
+curl -X POST http://your-build-host:9000/hooks/build
 ```
 
 ### Option 3: GitHub Actions Self-Hosted Runner
 
-1. Install the GitHub Actions runner on TrueNAS SCALE
+1. Install the GitHub Actions runner on your build host
 2. Add to `.github/workflows/build.yml`:
 
 ```yaml
