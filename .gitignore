@@ -26,3 +26,6 @@ CLAUDE.md
 
 # Packages
 *.deb
+
+# Release binaries (uploaded to GitHub Releases)
+/releases/
