@@ -193,7 +193,7 @@ pub struct Config {
 }
 
 /// Hotkey detection configuration
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct HotkeyConfig {
     /// Key name (evdev KEY_* constant name, without the KEY_ prefix)
     /// Examples: "SCROLLLOCK", "RIGHTALT", "PAUSE", "F24"
@@ -217,7 +217,7 @@ pub struct HotkeyConfig {
 }
 
 /// Audio capture configuration
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct AudioConfig {
     /// PipeWire/PulseAudio device name, or "default"
     pub device: String,
@@ -234,7 +234,7 @@ pub struct AudioConfig {
 }
 
 /// Audio feedback configuration for sound cues
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct AudioFeedbackConfig {
     /// Enable audio feedback sounds
     #[serde(default)]
@@ -456,7 +456,7 @@ fn load_custom_icon_theme(path: &str) -> Result<ResolvedIcons, String> {
 }
 
 /// Whisper speech-to-text configuration
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct WhisperConfig {
     /// Model name: tiny, base, small, medium, large-v3, large-v3-turbo
     /// Can also be an absolute path to a .bin file
@@ -478,7 +478,7 @@ pub struct WhisperConfig {
 }
 
 /// Text processing configuration
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 pub struct TextConfig {
     /// Enable spoken punctuation conversion (e.g., "period" → ".")
     #[serde(default)]
@@ -491,7 +491,7 @@ pub struct TextConfig {
 }
 
 /// Notification configuration
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct NotificationConfig {
     /// Notify when recording starts (hotkey pressed)
     #[serde(default)]
@@ -520,7 +520,7 @@ impl Default for NotificationConfig {
 ///
 /// Pipes transcribed text through an external command for cleanup/formatting.
 /// Commonly used with local LLMs (Ollama, llama.cpp) or text processing tools.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct PostProcessConfig {
     /// Shell command to execute
     /// Receives transcribed text on stdin, outputs processed text on stdout
@@ -536,7 +536,7 @@ fn default_post_process_timeout() -> u64 {
 }
 
 /// Text output configuration
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct OutputConfig {
     /// Primary output mode
     pub mode: OutputMode,

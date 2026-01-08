@@ -5,7 +5,7 @@
 
 use crate::audio::feedback::{AudioFeedback, SoundEvent};
 use crate::audio::{self, AudioCapture};
-use crate::config::{ActivationMode, Config};
+use crate::config::{load_config, ActivationMode, Config};
 use crate::error::Result;
 use crate::hotkey::{self, HotkeyEvent};
 use crate::output;
@@ -13,12 +13,14 @@ use crate::output::post_process::PostProcessor;
 use crate::state::State;
 use crate::text::TextProcessor;
 use crate::transcribe;
+use notify::{Config as NotifyConfig, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::signal::unix::{signal, SignalKind};
+use tokio::sync::mpsc;
 
 /// Send a desktop notification
 async fn send_notification(title: &str, body: &str) {
@@ -90,6 +92,75 @@ fn cleanup_pid_file(path: &PathBuf) {
             tracing::warn!("Failed to remove PID file: {}", e);
         }
     }
+}
+
+/// Start watching the config file for changes
+/// Returns a receiver that yields () when the config file changes
+fn start_config_watcher(config_path: PathBuf) -> Option<mpsc::Receiver<()>> {
+    let (tx, rx) = mpsc::channel(1);
+
+    // Clone path for the closure
+    let watch_path = config_path.clone();
+
+    std::thread::spawn(move || {
+        let (sync_tx, sync_rx) = std::sync::mpsc::channel();
+
+        let mut watcher = match RecommendedWatcher::new(
+            move |res: std::result::Result<notify::Event, notify::Error>| {
+                if let Ok(event) = res {
+                    // Only trigger on modify events
+                    if matches!(
+                        event.kind,
+                        notify::EventKind::Modify(_) | notify::EventKind::Create(_)
+                    ) {
+                        let _ = sync_tx.send(());
+                    }
+                }
+            },
+            NotifyConfig::default().with_poll_interval(Duration::from_millis(500)),
+        ) {
+            Ok(w) => w,
+            Err(e) => {
+                tracing::warn!("Failed to create config watcher: {}", e);
+                return;
+            }
+        };
+
+        // Watch the config file's parent directory to catch file replacements
+        if let Some(parent) = watch_path.parent() {
+            if let Err(e) = watcher.watch(parent, RecursiveMode::NonRecursive) {
+                tracing::warn!("Failed to watch config directory: {}", e);
+                return;
+            }
+        }
+
+        tracing::debug!("Config watcher started for {:?}", watch_path);
+
+        // Debounce: wait for events and batch them
+        loop {
+            match sync_rx.recv() {
+                Ok(()) => {
+                    // Wait a bit for any rapid successive writes to settle
+                    std::thread::sleep(Duration::from_millis(100));
+
+                    // Drain any additional events
+                    while sync_rx.try_recv().is_ok() {}
+
+                    // Send notification to async channel (non-blocking)
+                    if tx.blocking_send(()).is_err() {
+                        // Receiver dropped, exit the thread
+                        break;
+                    }
+                }
+                Err(_) => {
+                    // Channel closed, exit
+                    break;
+                }
+            }
+        }
+    });
+
+    Some(rx)
 }
 
 /// Main daemon that orchestrates all components
@@ -312,6 +383,13 @@ impl Daemon {
             crate::error::VoxtypeError::Config(format!("Failed to create directories: {}", e))
         })?;
 
+        // Set up config file watcher for hot reload
+        let config_path = Config::default_path();
+        let mut config_rx = config_path.as_ref().and_then(|p| start_config_watcher(p.clone()));
+        if config_rx.is_some() {
+            tracing::info!("Config hot-reload enabled");
+        }
+
         tracing::info!("Output mode: {:?}", self.config.output.mode);
 
         // Log state file if configured
@@ -328,8 +406,8 @@ impl Daemon {
             None
         };
 
-        // Initialize output chain
-        let output_chain = output::create_output_chain(&self.config.output);
+        // Initialize output chain (mutable for hot-reload)
+        let mut output_chain = output::create_output_chain(&self.config.output);
         tracing::debug!(
             "Output chain: {}",
             output_chain
@@ -362,8 +440,8 @@ impl Daemon {
         // Audio capture (created fresh for each recording)
         let mut audio_capture: Option<Box<dyn AudioCapture>> = None;
 
-        // Recording timeout
-        let max_duration = Duration::from_secs(self.config.audio.max_duration_secs as u64);
+        // Recording timeout (mutable for hot-reload)
+        let mut max_duration = Duration::from_secs(self.config.audio.max_duration_secs as u64);
 
         let activation_mode = self.config.hotkey.mode;
         if self.config.hotkey.enabled {
@@ -678,6 +756,93 @@ impl Daemon {
                             transcriber,
                             &output_chain,
                         ).await;
+                    }
+                }
+
+                // Handle config file changes (hot-reload)
+                Some(()) = async {
+                    match &mut config_rx {
+                        Some(rx) => rx.recv().await,
+                        None => std::future::pending().await,
+                    }
+                } => {
+                    tracing::info!("Config file changed, reloading...");
+
+                    // Only reload if not currently recording
+                    if !state.is_idle() {
+                        tracing::warn!("Cannot reload config while recording, will reload when idle");
+                        continue;
+                    }
+
+                    match load_config(config_path.as_deref()) {
+                        Ok(new_config) => {
+                            // Track what changed for logging
+                            let mut changes = Vec::new();
+
+                            // Update text processor
+                            if new_config.text != self.config.text {
+                                self.text_processor = TextProcessor::new(&new_config.text);
+                                changes.push("text processing");
+                            }
+
+                            // Update post processor
+                            if new_config.output.post_process != self.config.output.post_process {
+                                self.post_processor = new_config.output.post_process.as_ref().map(|cfg| {
+                                    PostProcessor::new(cfg)
+                                });
+                                changes.push("post-processor");
+                            }
+
+                            // Update output chain
+                            if new_config.output != self.config.output {
+                                output_chain = output::create_output_chain(&new_config.output);
+                                changes.push("output");
+                            }
+
+                            // Update audio feedback
+                            if new_config.audio.feedback != self.config.audio.feedback {
+                                self.audio_feedback = if new_config.audio.feedback.enabled {
+                                    AudioFeedback::new(&new_config.audio.feedback).ok()
+                                } else {
+                                    None
+                                };
+                                changes.push("audio feedback");
+                            }
+
+                            // Update max duration
+                            if new_config.audio.max_duration_secs != self.config.audio.max_duration_secs {
+                                max_duration = Duration::from_secs(new_config.audio.max_duration_secs as u64);
+                                changes.push("max duration");
+                            }
+
+                            // Note: hotkey changes require daemon restart
+                            if new_config.hotkey != self.config.hotkey {
+                                tracing::warn!("Hotkey config changed - restart daemon to apply");
+                            }
+
+                            // Note: whisper model changes require model reload
+                            if new_config.whisper.model != self.config.whisper.model {
+                                tracing::warn!("Whisper model changed - will use new model on next transcription");
+                            }
+
+                            // Store new config
+                            self.config = new_config;
+
+                            if changes.is_empty() {
+                                tracing::info!("Config reloaded (no runtime changes)");
+                            } else {
+                                tracing::info!("Config reloaded: {}", changes.join(", "));
+                            }
+
+                            // Send notification
+                            send_notification("Config Reloaded", &format!("Updated: {}",
+                                if changes.is_empty() { "no changes".to_string() } else { changes.join(", ") }
+                            )).await;
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to reload config: {}", e);
+                            send_notification("Config Reload Failed", &e.to_string()).await;
+                        }
                     }
                 }
 
