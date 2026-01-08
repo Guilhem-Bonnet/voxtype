@@ -1,5 +1,7 @@
 # Voxtype
 
+> **Note:** Git history was rewritten on 2025-01-07 to remove large binary files. If you have a fork or clone from before this date and encounter issues, see [issue #35](https://github.com/peteonrails/voxtype/issues/35) for instructions.
+
 [![Voxtype - Voice to Text for Linux](website/images/og-preview.png)](https://voxtype.io)
 
 **[voxtype.io](https://voxtype.io)**
@@ -129,6 +131,7 @@ translate = false   # Translate non-English speech to English
 mode = "type"       # "type", "clipboard", or "paste"
 fallback_to_clipboard = true
 type_delay_ms = 0   # Increase if characters are dropped
+# auto_submit = true  # Send Enter after transcription (for chat apps, terminals)
 # Note: "paste" mode copies to clipboard then simulates Ctrl+V
 #       Useful for non-US keyboard layouts where ydotool typing fails
 
@@ -543,6 +546,7 @@ We want to hear from you! Voxtype is a young project and your feedback helps mak
 - [materemias](https://github.com/materemias) - Paste output mode, on-demand model loading, PKGBUILD fix
 - [reisset](https://github.com/reisset) - Testing and feedback on post-processing feature
 - [Goodroot](https://github.com/goodroot) - Testing, feedback, and documentation updates
+- [robzolkos](https://github.com/robzolkos) - Auto-submit feature for AI agent workflows
 
 ## License
 
