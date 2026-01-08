@@ -134,6 +134,8 @@ pub enum RecordAction {
     Stop,
     /// Toggle recording state
     Toggle,
+    /// Cancel current recording or transcription (discard without output)
+    Cancel,
 }
 
 #[derive(Subcommand)]
@@ -302,6 +304,17 @@ mod tests {
                 assert!(restart, "should have restart=true");
             }
             _ => panic!("Expected Setup Model command"),
+        }
+    }
+
+    #[test]
+    fn test_record_cancel() {
+        let cli = Cli::parse_from(["voxtype", "record", "cancel"]);
+        match cli.command {
+            Some(Commands::Record { action: RecordAction::Cancel }) => {
+                // Success - cancel action parsed correctly
+            }
+            _ => panic!("Expected Record Cancel command"),
         }
     }
 }

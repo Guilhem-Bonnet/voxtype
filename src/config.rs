@@ -214,6 +214,12 @@ pub struct HotkeyConfig {
     /// When disabled, use `voxtype record start/stop/toggle` to control recording
     #[serde(default = "default_true")]
     pub enabled: bool,
+
+    /// Optional cancel key (evdev KEY_* constant name, without KEY_ prefix)
+    /// When pressed, cancels the current recording or transcription
+    /// Examples: "ESC", "BACKSPACE", "F12"
+    #[serde(default)]
+    pub cancel_key: Option<String>,
 }
 
 /// Audio capture configuration
@@ -589,6 +595,7 @@ impl Default for Config {
                 modifiers: vec![],
                 mode: ActivationMode::default(),
                 enabled: true,
+                cancel_key: None,
             },
             audio: AudioConfig {
                 device: "default".to_string(),
