@@ -192,7 +192,8 @@ impl Daemon {
 
         // Send notification if enabled
         if self.config.output.notification.on_recording_stop {
-            send_notification("Recording Stopped", "Transcribing...").await;
+            let message = self.config.output.notification.get_recording_stop_message();
+            send_notification("Recording Stopped", message).await;
         }
 
         // Stop recording and get samples
@@ -400,7 +401,8 @@ impl Daemon {
 
                                 // Send notification if enabled
                                 if self.config.output.notification.on_recording_start {
-                                    send_notification("Push to Talk Active", "Recording...").await;
+                                    let message = self.config.output.notification.get_recording_start_message(activation_mode);
+                                    send_notification("Recording Started", message).await;
                                 }
 
                                 // Start model loading in background if on-demand loading is enabled
@@ -493,7 +495,8 @@ impl Daemon {
                                 tracing::info!("Recording started (toggle mode)");
 
                                 if self.config.output.notification.on_recording_start {
-                                    send_notification("Recording Started", "Press hotkey again to stop").await;
+                                    let message = self.config.output.notification.get_recording_start_message(activation_mode);
+                                    send_notification("Recording Started", message).await;
                                 }
 
                                 // Start model loading in background if on-demand loading is enabled
@@ -602,7 +605,8 @@ impl Daemon {
                         tracing::info!("Recording started (external trigger)");
 
                         if self.config.output.notification.on_recording_start {
-                            send_notification("Recording Started", "External trigger").await;
+                            let message = self.config.output.notification.get_recording_start_message(activation_mode);
+                            send_notification("Recording Started", message).await;
                         }
 
                         // Start model loading in background if on-demand loading is enabled

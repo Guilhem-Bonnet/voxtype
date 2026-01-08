@@ -122,6 +122,10 @@ on_recording_stop = false
 # Show notification with transcribed text after transcription completes
 on_transcription = true
 
+# Custom notification messages (optional)
+# recording_start_message = "Listening..."
+# recording_stop_message = "Processing speech..."
+
 # [text]
 # Text processing options (word replacements, spoken punctuation)
 #
@@ -504,6 +508,16 @@ pub struct NotificationConfig {
     /// Notify with transcribed text after transcription completes
     #[serde(default = "default_true")]
     pub on_transcription: bool,
+
+    /// Custom message when recording starts
+    /// Default: "Recording..." (or "Press hotkey again to stop" in toggle mode)
+    #[serde(default)]
+    pub recording_start_message: Option<String>,
+
+    /// Custom message when recording stops
+    /// Default: "Transcribing..."
+    #[serde(default)]
+    pub recording_stop_message: Option<String>,
 }
 
 impl Default for NotificationConfig {
@@ -512,7 +526,26 @@ impl Default for NotificationConfig {
             on_recording_start: false,
             on_recording_stop: false,
             on_transcription: true,
+            recording_start_message: None,
+            recording_stop_message: None,
         }
+    }
+}
+
+impl NotificationConfig {
+    /// Get the recording start message, with default based on activation mode
+    pub fn get_recording_start_message(&self, mode: ActivationMode) -> &str {
+        self.recording_start_message.as_deref().unwrap_or_else(|| {
+            match mode {
+                ActivationMode::PushToTalk => "Recording...",
+                ActivationMode::Toggle => "Press hotkey again to stop",
+            }
+        })
+    }
+
+    /// Get the recording stop message
+    pub fn get_recording_stop_message(&self) -> &str {
+        self.recording_stop_message.as_deref().unwrap_or("Transcribing...")
     }
 }
 
