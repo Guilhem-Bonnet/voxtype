@@ -25,11 +25,34 @@
           openssl
         ];
 
-        # Base derivation for voxtype
-        mkVoxtype = { pname ? "voxtype", features ? [], extraNativeBuildInputs ? [], extraBuildInputs ? [] }:
+        # Runtime dependencies wrapped into PATH
+        runtimeDeps = with pkgs; [
+          wtype         # Wayland typing
+          wl-clipboard  # Wayland clipboard (wl-copy, wl-paste)
+          ydotool       # Alternative typing backend (X11 and Wayland)
+          xdotool       # X11 typing fallback
+          xclip         # X11 clipboard fallback
+          libnotify     # Desktop notifications
+          pciutils      # GPU detection (lspci)
+        ];
+
+        # Wrap a package with runtime dependencies
+        wrapVoxtype = pkg: pkgs.symlinkJoin {
+          name = "${pkg.pname or "voxtype"}-wrapped-${pkg.version}";
+          paths = [ pkg ];
+          buildInputs = [ pkgs.makeWrapper ];
+          postBuild = ''
+            wrapProgram $out/bin/voxtype \
+              --prefix PATH : ${pkgs.lib.makeBinPath runtimeDeps}
+          '';
+          inherit (pkg) meta;
+        };
+
+        # Base derivation for voxtype (unwrapped)
+        mkVoxtypeUnwrapped = { pname ? "voxtype", features ? [], extraNativeBuildInputs ? [], extraBuildInputs ? [] }:
           pkgs.rustPlatform.buildRustPackage {
             inherit pname;
-            version = "0.4.7";
+            version = "0.4.9";
 
             src = ./.;
             cargoLock.lockFile = ./Cargo.lock;
@@ -87,74 +110,86 @@
             };
           };
 
+        # Build the Vulkan variant (unwrapped)
+        vulkanUnwrapped = let
+          pkg = mkVoxtypeUnwrapped {
+            pname = "voxtype-vulkan";
+            features = [ "gpu-vulkan" ];
+            extraNativeBuildInputs = with pkgs; [
+              shaderc
+              vulkan-headers
+              vulkan-loader
+            ];
+            extraBuildInputs = with pkgs; [
+              vulkan-headers
+              vulkan-loader
+            ];
+          };
+        in pkg.overrideAttrs (old: {
+          # Help cmake find Vulkan SDK components
+          preBuild = (old.preBuild or "") + ''
+            export CMAKE_BUILD_PARALLEL_LEVEL=$NIX_BUILD_CORES
+            export VULKAN_SDK="${pkgs.vulkan-loader}"
+            export Vulkan_INCLUDE_DIR="${pkgs.vulkan-headers}/include"
+            export Vulkan_LIBRARY="${pkgs.vulkan-loader}/lib/libvulkan.so"
+          '';
+        });
+
+        # Build the ROCm/HIP variant for AMD GPUs (unwrapped)
+        rocmUnwrapped = let
+          pkg = mkVoxtypeUnwrapped {
+            pname = "voxtype-rocm";
+            features = [ "gpu-hipblas" ];
+            extraNativeBuildInputs = with pkgs; [
+              rocmPackages.clr
+              rocmPackages.hipblas
+              rocmPackages.rocblas
+            ];
+            extraBuildInputs = with pkgs; [
+              rocmPackages.clr
+              rocmPackages.hipblas
+              rocmPackages.rocblas
+            ];
+          };
+        in pkg.overrideAttrs (old: {
+          # Help cmake find ROCm/HIP components
+          preBuild = (old.preBuild or "") + ''
+            export CMAKE_BUILD_PARALLEL_LEVEL=$NIX_BUILD_CORES
+            export HIP_PATH="${pkgs.rocmPackages.clr}"
+            export ROCM_PATH="${pkgs.rocmPackages.clr}"
+          '';
+        });
+
       in {
         packages = {
-          # Default: CPU-only build (AVX2 baseline on x86_64)
-          default = mkVoxtype {};
+          # Unwrapped packages (for Home Manager module which does its own wrapping)
+          voxtype-unwrapped = mkVoxtypeUnwrapped {};
+          voxtype-vulkan-unwrapped = vulkanUnwrapped;
+          voxtype-rocm-unwrapped = rocmUnwrapped;
 
-          # Vulkan GPU acceleration
-          vulkan = let
-            vulkanPkg = mkVoxtype {
-              pname = "voxtype-vulkan";
-              features = [ "gpu-vulkan" ];
-              extraNativeBuildInputs = with pkgs; [
-                shaderc
-                vulkan-headers
-                vulkan-loader
-              ];
-              extraBuildInputs = with pkgs; [
-                vulkan-headers
-                vulkan-loader
-              ];
-            };
-          in vulkanPkg.overrideAttrs (old: {
-            # Help cmake find Vulkan SDK components
-            preBuild = (old.preBuild or "") + ''
-              export CMAKE_BUILD_PARALLEL_LEVEL=$NIX_BUILD_CORES
-              export VULKAN_SDK="${pkgs.vulkan-loader}"
-              export Vulkan_INCLUDE_DIR="${pkgs.vulkan-headers}/include"
-              export Vulkan_LIBRARY="${pkgs.vulkan-loader}/lib/libvulkan.so"
-            '';
-          });
+          # Wrapped packages (ready to use, runtime deps in PATH)
+          default = wrapVoxtype (mkVoxtypeUnwrapped {});
+          vulkan = wrapVoxtype vulkanUnwrapped;
+          rocm = wrapVoxtype rocmUnwrapped;
         };
 
         # Development shell with all dependencies
         devShells.default = pkgs.mkShell {
-          inputsFrom = [ self.packages.${system}.default ];
+          inputsFrom = [ self.packages.${system}.voxtype-unwrapped ];
 
           packages = with pkgs; [
             rust-analyzer
             rustfmt
             clippy
-            # Optional runtime deps for testing
-            wtype
-            ydotool
-            wl-clipboard
-          ];
+          ] ++ runtimeDeps;
         };
       }) // {
+        # Home Manager module for declarative user-level configuration
+        # This is the recommended way to use VoxType on NixOS
+        homeManagerModules.default = import ./nix/home-manager-module.nix;
+
         # NixOS module for system-level configuration
-        nixosModules.default = { config, lib, pkgs, ... }:
-          let
-            cfg = config.services.voxtype;
-          in {
-            options.services.voxtype = {
-              enable = lib.mkEnableOption "voxtype voice-to-text service";
-
-              package = lib.mkOption {
-                type = lib.types.package;
-                default = self.packages.${pkgs.system}.default;
-                description = "The voxtype package to use";
-              };
-            };
-
-            config = lib.mkIf cfg.enable {
-              environment.systemPackages = [ cfg.package ];
-
-              # Users need input group access for evdev
-              # Note: Users must add themselves to the input group
-              # or configure appropriate udev rules
-            };
-          };
+        # Provides typing backend selection, input group management, and ydotool daemon
+        nixosModules.default = import ./nix/nixos-module.nix;
       };
 }

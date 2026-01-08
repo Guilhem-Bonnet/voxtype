@@ -543,6 +543,8 @@ We want to hear from you! Voxtype is a young project and your feedback helps mak
 - [Peter Jackson](https://github.com/peteonrails) - Creator and maintainer
 - [jvantillo](https://github.com/jvantillo) - GPU acceleration patch, whisper-rs 0.15.1 compatibility
 - [materemias](https://github.com/materemias) - Paste output mode, on-demand model loading, PKGBUILD fix
+- [Dan Heuckeroth](https://github.com/danheuck) - NixOS Home Manager module design
+- [Kevin Miller](https://github.com/digunix) - NixOS module enhancements, ROCm support
 - [reisset](https://github.com/reisset) - Testing and feedback on post-processing feature
 - [Goodroot](https://github.com/goodroot) - Testing, feedback, and documentation updates
 - [robzolkos](https://github.com/robzolkos) - Auto-submit feature for AI agent workflows
