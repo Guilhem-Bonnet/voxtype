@@ -147,6 +147,7 @@ async fn main() -> anyhow::Result<()> {
 fn send_record_command(config: &config::Config, action: RecordAction) -> anyhow::Result<()> {
     use nix::sys::signal::{kill, Signal};
     use nix::unistd::Pid;
+    use voxtype::OutputModeOverride;
 
     // Read PID from the pid file
     let pid_file = config::Config::runtime_dir().join("pid");
@@ -174,11 +175,23 @@ fn send_record_command(config: &config::Config, action: RecordAction) -> anyhow:
         std::process::exit(1);
     }
 
+    // Write output mode override file if specified
+    if let Some(mode_override) = action.output_mode_override() {
+        let override_file = config::Config::runtime_dir().join("output_mode_override");
+        let mode_str = match mode_override {
+            OutputModeOverride::Type => "type",
+            OutputModeOverride::Clipboard => "clipboard",
+            OutputModeOverride::Paste => "paste",
+        };
+        std::fs::write(&override_file, mode_str)
+            .map_err(|e| anyhow::anyhow!("Failed to write output mode override: {}", e))?;
+    }
+
     // For toggle, we need to read current state to decide which signal to send
-    let signal = match action {
-        RecordAction::Start => Signal::SIGUSR1,
-        RecordAction::Stop => Signal::SIGUSR2,
-        RecordAction::Toggle => {
+    let signal = match &action {
+        RecordAction::Start { .. } => Signal::SIGUSR1,
+        RecordAction::Stop { .. } => Signal::SIGUSR2,
+        RecordAction::Toggle { .. } => {
             // Read current state to determine action
             let state_file = match config.resolve_state_file() {
                 Some(path) => path,

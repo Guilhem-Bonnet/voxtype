@@ -5,7 +5,7 @@
 
 use crate::audio::feedback::{AudioFeedback, SoundEvent};
 use crate::audio::{self, AudioCapture};
-use crate::config::{ActivationMode, Config};
+use crate::config::{ActivationMode, Config, OutputMode};
 use crate::error::Result;
 use crate::hotkey::{self, HotkeyEvent};
 use crate::output;
@@ -90,6 +90,53 @@ fn cleanup_pid_file(path: &PathBuf) {
             tracing::warn!("Failed to remove PID file: {}", e);
         }
     }
+}
+
+/// Read and consume the output mode override file
+/// Returns the override mode if the file exists and is valid, None otherwise
+fn read_output_mode_override() -> Option<OutputMode> {
+    let override_file = Config::runtime_dir().join("output_mode_override");
+    if !override_file.exists() {
+        return None;
+    }
+
+    let mode_str = match std::fs::read_to_string(&override_file) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!("Failed to read output mode override file: {}", e);
+            return None;
+        }
+    };
+
+    // Consume the file (delete it after reading)
+    if let Err(e) = std::fs::remove_file(&override_file) {
+        tracing::warn!("Failed to remove output mode override file: {}", e);
+    }
+
+    match mode_str.trim() {
+        "type" => {
+            tracing::info!("Using output mode override: type");
+            Some(OutputMode::Type)
+        }
+        "clipboard" => {
+            tracing::info!("Using output mode override: clipboard");
+            Some(OutputMode::Clipboard)
+        }
+        "paste" => {
+            tracing::info!("Using output mode override: paste");
+            Some(OutputMode::Paste)
+        }
+        other => {
+            tracing::warn!("Invalid output mode override: {:?}", other);
+            None
+        }
+    }
+}
+
+/// Remove the output mode override file if it exists (for cleanup on cancel/error)
+fn cleanup_output_mode_override() {
+    let override_file = Config::runtime_dir().join("output_mode_override");
+    let _ = std::fs::remove_file(&override_file);
 }
 
 /// Main daemon that orchestrates all components
@@ -182,7 +229,6 @@ impl Daemon {
         state: &mut State,
         audio_capture: &mut Option<Box<dyn AudioCapture>>,
         transcriber: Option<Arc<Box<dyn crate::transcribe::Transcriber>>>,
-        output_chain: &[Box<dyn output::TextOutput>],
     ) {
         let duration = state.recording_duration().unwrap_or_default();
         tracing::info!("Recording stopped ({:.1}s)", duration.as_secs_f32());
@@ -207,6 +253,7 @@ impl Daemon {
                             "Recording too short ({:.2}s), ignoring",
                             audio_duration
                         );
+                        cleanup_output_mode_override();
                         *state = State::Idle;
                         self.update_state("idle");
                         return;
@@ -233,6 +280,7 @@ impl Daemon {
                         Ok(Ok(text)) => {
                             if text.is_empty() {
                                 tracing::debug!("Transcription was empty");
+                                cleanup_output_mode_override();
                                 *state = State::Idle;
                                 self.update_state("idle");
                             } else {
@@ -254,11 +302,21 @@ impl Daemon {
                                     processed_text
                                 };
 
+                                // Create output chain with potential override
+                                let output_config = if let Some(mode_override) = read_output_mode_override() {
+                                    let mut config = self.config.output.clone();
+                                    config.mode = mode_override;
+                                    config
+                                } else {
+                                    self.config.output.clone()
+                                };
+                                let output_chain = output::create_output_chain(&output_config);
+
                                 // Output the text
                                 *state = State::Outputting { text: final_text.clone() };
 
                                 if let Err(e) = output::output_with_fallback(
-                                    output_chain,
+                                    &output_chain,
                                     &final_text
                                 ).await {
                                     tracing::error!("Output failed: {}", e);
@@ -270,11 +328,13 @@ impl Daemon {
                         }
                         Ok(Err(e)) => {
                             tracing::error!("Transcription failed: {}", e);
+                            cleanup_output_mode_override();
                             *state = State::Idle;
                             self.update_state("idle");
                         }
                         Err(e) => {
                             tracing::error!("Transcription task failed: {}", e);
+                            cleanup_output_mode_override();
                             *state = State::Idle;
                             self.update_state("idle");
                         }
@@ -282,11 +342,13 @@ impl Daemon {
                 }
                 Err(e) => {
                     tracing::warn!("Recording error: {}", e);
+                    cleanup_output_mode_override();
                     *state = State::Idle;
                     self.update_state("idle");
                 }
             }
         } else {
+            cleanup_output_mode_override();
             *state = State::Idle;
             self.update_state("idle");
         }
@@ -328,16 +390,17 @@ impl Daemon {
             None
         };
 
-        // Initialize output chain
-        let output_chain = output::create_output_chain(&self.config.output);
+        // Log default output chain (chain is created dynamically per-transcription to support overrides)
+        let default_chain = output::create_output_chain(&self.config.output);
         tracing::debug!(
-            "Output chain: {}",
-            output_chain
+            "Default output chain: {}",
+            default_chain
                 .iter()
                 .map(|o| o.name())
                 .collect::<Vec<_>>()
                 .join(" -> ")
         );
+        drop(default_chain); // Not used; chain is created per-transcription
 
         // Pre-load whisper model if on_demand_loading is disabled
         let mut transcriber_preloaded = None;
@@ -478,7 +541,6 @@ impl Daemon {
                                     &mut state,
                                     &mut audio_capture,
                                     transcriber,
-                                    &output_chain,
                                 ).await;
                             }
                         }
@@ -564,7 +626,6 @@ impl Daemon {
                                     &mut state,
                                     &mut audio_capture,
                                     transcriber,
-                                    &output_chain,
                                 ).await;
                             }
                         }
@@ -676,7 +737,6 @@ impl Daemon {
                             &mut state,
                             &mut audio_capture,
                             transcriber,
-                            &output_chain,
                         ).await;
                     }
                 }

@@ -126,14 +126,79 @@ pub enum Commands {
     },
 }
 
+/// Output mode override for record commands
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputModeOverride {
+    Type,
+    Clipboard,
+    Paste,
+}
+
 #[derive(Subcommand)]
 pub enum RecordAction {
     /// Start recording (send SIGUSR1 to daemon)
-    Start,
+    Start {
+        /// Override output mode to simulate keyboard typing
+        #[arg(long = "type", group = "output_mode")]
+        type_mode: bool,
+
+        /// Override output mode to clipboard only
+        #[arg(long, group = "output_mode")]
+        clipboard: bool,
+
+        /// Override output mode to paste (clipboard + Ctrl+V)
+        #[arg(long, group = "output_mode")]
+        paste: bool,
+    },
     /// Stop recording and transcribe (send SIGUSR2 to daemon)
-    Stop,
+    Stop {
+        /// Override output mode to simulate keyboard typing
+        #[arg(long = "type", group = "output_mode")]
+        type_mode: bool,
+
+        /// Override output mode to clipboard only
+        #[arg(long, group = "output_mode")]
+        clipboard: bool,
+
+        /// Override output mode to paste (clipboard + Ctrl+V)
+        #[arg(long, group = "output_mode")]
+        paste: bool,
+    },
     /// Toggle recording state
-    Toggle,
+    Toggle {
+        /// Override output mode to simulate keyboard typing
+        #[arg(long = "type", group = "output_mode")]
+        type_mode: bool,
+
+        /// Override output mode to clipboard only
+        #[arg(long, group = "output_mode")]
+        clipboard: bool,
+
+        /// Override output mode to paste (clipboard + Ctrl+V)
+        #[arg(long, group = "output_mode")]
+        paste: bool,
+    },
+}
+
+impl RecordAction {
+    /// Extract the output mode override from the action flags
+    pub fn output_mode_override(&self) -> Option<OutputModeOverride> {
+        let (type_mode, clipboard, paste) = match self {
+            RecordAction::Start { type_mode, clipboard, paste } => (*type_mode, *clipboard, *paste),
+            RecordAction::Stop { type_mode, clipboard, paste } => (*type_mode, *clipboard, *paste),
+            RecordAction::Toggle { type_mode, clipboard, paste } => (*type_mode, *clipboard, *paste),
+        };
+
+        if type_mode {
+            Some(OutputModeOverride::Type)
+        } else if clipboard {
+            Some(OutputModeOverride::Clipboard)
+        } else if paste {
+            Some(OutputModeOverride::Paste)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -302,6 +367,72 @@ mod tests {
                 assert!(restart, "should have restart=true");
             }
             _ => panic!("Expected Setup Model command"),
+        }
+    }
+
+    #[test]
+    fn test_record_start_no_override() {
+        let cli = Cli::parse_from(["voxtype", "record", "start"]);
+        match cli.command {
+            Some(Commands::Record { action }) => {
+                assert_eq!(action.output_mode_override(), None);
+            }
+            _ => panic!("Expected Record command"),
+        }
+    }
+
+    #[test]
+    fn test_record_start_paste_override() {
+        let cli = Cli::parse_from(["voxtype", "record", "start", "--paste"]);
+        match cli.command {
+            Some(Commands::Record { action }) => {
+                assert_eq!(action.output_mode_override(), Some(OutputModeOverride::Paste));
+            }
+            _ => panic!("Expected Record command"),
+        }
+    }
+
+    #[test]
+    fn test_record_start_clipboard_override() {
+        let cli = Cli::parse_from(["voxtype", "record", "start", "--clipboard"]);
+        match cli.command {
+            Some(Commands::Record { action }) => {
+                assert_eq!(action.output_mode_override(), Some(OutputModeOverride::Clipboard));
+            }
+            _ => panic!("Expected Record command"),
+        }
+    }
+
+    #[test]
+    fn test_record_start_type_override() {
+        let cli = Cli::parse_from(["voxtype", "record", "start", "--type"]);
+        match cli.command {
+            Some(Commands::Record { action }) => {
+                assert_eq!(action.output_mode_override(), Some(OutputModeOverride::Type));
+            }
+            _ => panic!("Expected Record command"),
+        }
+    }
+
+    #[test]
+    fn test_record_stop_paste_override() {
+        let cli = Cli::parse_from(["voxtype", "record", "stop", "--paste"]);
+        match cli.command {
+            Some(Commands::Record { action }) => {
+                assert_eq!(action.output_mode_override(), Some(OutputModeOverride::Paste));
+            }
+            _ => panic!("Expected Record command"),
+        }
+    }
+
+    #[test]
+    fn test_record_toggle_paste_override() {
+        let cli = Cli::parse_from(["voxtype", "record", "toggle", "--paste"]);
+        match cli.command {
+            Some(Commands::Record { action }) => {
+                assert_eq!(action.output_mode_override(), Some(OutputModeOverride::Paste));
+            }
+            _ => panic!("Expected Record command"),
         }
     }
 }
