@@ -50,9 +50,21 @@
 //!                                            │
 //!                                            ▼ final text
 //!                                   ┌──────────────┐
+//!                                   │  Pre-Output  │ (optional: compositor hook)
+//!                                   │    Hook      │
+//!                                   └──────────────┘
+//!                                            │
+//!                                            ▼
+//!                                   ┌──────────────┐
 //!                                   │    Output    │
 //!                                   │ wtype/ydotool│
 //!                                   │  /clipboard  │
+//!                                   └──────────────┘
+//!                                            │
+//!                                            ▼
+//!                                   ┌──────────────┐
+//!                                   │ Post-Output  │ (optional: compositor hook)
+//!                                   │    Hook      │
 //!                                   └──────────────┘
 //! ```
 

@@ -507,21 +507,18 @@ type_delay_ms = 10
 
 ## Architecture
 
-```
-┌───────────────────────────────────────────────────────────────────────┐
-│                              Daemon                                   │
-├───────────────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌───────────┐ │
-│  │   Hotkey     │  │    Audio     │  │ Post-Process │  │   Output  │ │
-│  │  (evdev)     │──│   (cpal)     │──│  (optional)  │──│  (wtype)  │ │
-│  └──────────────┘  └──────────────┘  └──────────────┘  └───────────┘ │
-│         │               │                   │                │        │
-│         │               ▼                   │                │        │
-│         │        ┌──────────────┐           │                │        │
-│         │        │   Whisper    │───────────┘                │        │
-│         └───────▶│  (whisper-rs)│────────────────────────────┘        │
-│                  └──────────────┘                                     │
-└───────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Daemon
+        Hotkey["Hotkey<br/>(evdev)"] --> Audio["Audio<br/>(cpal)"]
+        Audio --> Whisper["Whisper<br/>(whisper-rs)"]
+        Whisper --> PostProcess["Post-Process<br/>(optional)"]
+        PostProcess --> PreHook["Pre-Output<br/>Hook"]
+        PreHook --> Output["Output<br/>(wtype/ydotool)"]
+        Output --> PostHook["Post-Output<br/>Hook"]
+        PreHook -.-> Compositor["Compositor<br/>(submap/mode)"]
+        PostHook -.-> Compositor
+    end
 ```
 
 **Why compositor keybindings?** Wayland compositors like Hyprland, Sway, and River support key-release events, enabling push-to-talk without special permissions. Voxtype's `record start/stop` commands integrate directly with your compositor's keybinding system.

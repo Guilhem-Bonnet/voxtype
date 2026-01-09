@@ -481,6 +481,62 @@ auto_submit = true  # Press Enter after transcription
 
 **Note:** This works with all output modes (`type`, `paste`) but has no effect in `clipboard` mode since clipboard-only output doesn't simulate keypresses.
 
+### pre_output_command
+
+**Type:** String
+**Default:** None (disabled)
+**Required:** No
+
+Shell command to execute immediately before typing output. Runs after post-processing but before text is typed/pasted.
+
+**Primary use case:** Compositor integration to block modifier keys during typing. When using compositor keybindings with modifiers (e.g., `SUPER+CTRL+X`), if you release keys slowly, held modifiers can interfere with typed output.
+
+**Example:**
+```toml
+[output]
+pre_output_command = "hyprctl dispatch submap voxtype_suppress"
+```
+
+**Automatic setup:** Use `voxtype setup compositor hyprland|sway|river` to automatically configure this.
+
+### post_output_command
+
+**Type:** String
+**Default:** None (disabled)
+**Required:** No
+
+Shell command to execute immediately after typing output completes.
+
+**Primary use case:** Compositor integration to restore normal modifier behavior after typing.
+
+**Example:**
+```toml
+[output]
+post_output_command = "hyprctl dispatch submap reset"
+```
+
+**Compositor integration example:**
+```toml
+[output]
+# Switch to modifier-blocking submap before typing
+pre_output_command = "hyprctl dispatch submap voxtype_suppress"
+# Return to normal submap after typing
+post_output_command = "hyprctl dispatch submap reset"
+```
+
+**Other uses:**
+```toml
+[output]
+# Notification when typing starts/finishes
+pre_output_command = "notify-send 'Typing...'"
+post_output_command = "notify-send 'Done'"
+
+# Logging
+post_output_command = "echo $(date) >> ~/voxtype.log"
+```
+
+See [User Manual - Output Hooks](USER_MANUAL.md#output-hooks-compositor-integration) for detailed setup instructions.
+
 ---
 
 ## [output.post_process]
