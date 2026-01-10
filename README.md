@@ -12,8 +12,8 @@ Hold a hotkey (default: ScrollLock) while speaking, release to transcribe and ou
 
 ## Features
 
-- **Works on any Linux desktop** - Uses kernel-level input (evdev). Works on Wayland and X11
-- **Fully offline** - Uses whisper.cpp for local transcription, no internet required
+- **Works on any Linux desktop** - Uses compositor keybindings (Hyprland, Sway, River) with evdev fallback for X11 and other environments
+- **Fully offline by default** - Uses whisper.cpp for local transcription, with optional remote server support
 - **Fallback chain** - Types via wtype (best CJK support), falls back to ydotool, then clipboard
 - **Push-to-talk or Toggle mode** - Hold to record, or press once to start/stop
 - **Audio feedback** - Optional sound cues when recording starts/stops
