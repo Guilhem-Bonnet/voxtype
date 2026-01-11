@@ -55,6 +55,9 @@ async fn main() -> anyhow::Result<()> {
     if cli.toggle {
         config.hotkey.mode = config::ActivationMode::Toggle;
     }
+    if let Some(delay) = cli.wtype_delay {
+        config.output.wtype_delay_ms = delay;
+    }
 
     // Run the appropriate command
     match cli.command.unwrap_or(Commands::Daemon) {
@@ -585,6 +588,7 @@ async fn show_config(config: &config::Config) -> anyhow::Result<()> {
         config.output.fallback_to_clipboard
     );
     println!("  type_delay_ms = {}", config.output.type_delay_ms);
+    println!("  wtype_delay_ms = {}", config.output.wtype_delay_ms);
 
     println!("\n[output.notification]");
     println!(

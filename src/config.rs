@@ -622,6 +622,11 @@ pub struct OutputConfig {
     #[serde(default)]
     pub type_delay_ms: u32,
 
+    /// Delay before wtype starts typing (ms), allows virtual keyboard to initialize
+    /// Helps prevent first character from being dropped on some compositors
+    #[serde(default)]
+    pub wtype_delay_ms: u32,
+
     /// Automatically submit (send Enter key) after outputting transcribed text
     /// Useful for chat applications, command lines, or forms where you want
     /// to auto-submit after dictation
@@ -693,6 +698,7 @@ impl Default for Config {
                 fallback_to_clipboard: true,
                 notification: NotificationConfig::default(),
                 type_delay_ms: 0,
+                wtype_delay_ms: 0,
                 auto_submit: false,
                 pre_output_command: None,
                 post_output_command: None,

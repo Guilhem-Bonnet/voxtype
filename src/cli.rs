@@ -64,6 +64,10 @@ pub struct Cli {
     #[arg(long)]
     pub toggle: bool,
 
+    /// Delay before wtype starts typing (ms), helps prevent first character drop
+    #[arg(long, value_name = "MS")]
+    pub wtype_delay: Option<u32>,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
