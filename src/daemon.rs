@@ -249,6 +249,21 @@ impl Daemon {
         }
     }
 
+    /// Reset state to idle and run post_output_command to reset compositor submap
+    /// Call this when exiting from recording/transcribing without normal output flow
+    async fn reset_to_idle(&self, state: &mut State) {
+        cleanup_output_mode_override();
+        *state = State::Idle;
+        self.update_state("idle");
+
+        // Run post_output_command to reset compositor submap
+        if let Some(cmd) = &self.config.output.post_output_command {
+            if let Err(e) = output::run_hook(cmd, "post_output").await {
+                tracing::warn!("{}", e);
+            }
+        }
+    }
+
     /// Start transcription task (non-blocking, stores JoinHandle for later completion)
     /// Returns true if transcription was started, false if skipped (too short)
     async fn start_transcription_task(
@@ -280,9 +295,7 @@ impl Daemon {
                             "Recording too short ({:.2}s), ignoring",
                             audio_duration
                         );
-                        cleanup_output_mode_override();
-                        *state = State::Idle;
-                        self.update_state("idle");
+                        self.reset_to_idle(state).await;
                         return false;
                     }
 
@@ -302,24 +315,18 @@ impl Daemon {
                     } else {
                         tracing::error!("No transcriber available");
                         self.play_feedback(SoundEvent::Error);
-                        cleanup_output_mode_override();
-                        *state = State::Idle;
-                        self.update_state("idle");
+                        self.reset_to_idle(state).await;
                         return false;
                     }
                 }
                 Err(e) => {
                     tracing::warn!("Recording error: {}", e);
-                    cleanup_output_mode_override();
-                    *state = State::Idle;
-                    self.update_state("idle");
+                    self.reset_to_idle(state).await;
                     return false;
                 }
             }
         } else {
-            cleanup_output_mode_override();
-            *state = State::Idle;
-            self.update_state("idle");
+            self.reset_to_idle(state).await;
             return false;
         }
     }
@@ -334,9 +341,7 @@ impl Daemon {
             Ok(Ok(text)) => {
                 if text.is_empty() {
                     tracing::debug!("Transcription was empty");
-                    cleanup_output_mode_override();
-                    *state = State::Idle;
-                    self.update_state("idle");
+                    self.reset_to_idle(state).await;
                 } else {
                     tracing::info!("Transcribed: {:?}", text);
 
@@ -388,9 +393,7 @@ impl Daemon {
             }
             Ok(Err(e)) => {
                 tracing::error!("Transcription failed: {}", e);
-                cleanup_output_mode_override();
-                *state = State::Idle;
-                self.update_state("idle");
+                self.reset_to_idle(state).await;
             }
             Err(e) => {
                 // JoinError - task was cancelled or panicked
@@ -399,9 +402,7 @@ impl Daemon {
                 } else {
                     tracing::error!("Transcription task panicked: {}", e);
                 }
-                cleanup_output_mode_override();
-                *state = State::Idle;
-                self.update_state("idle");
+                self.reset_to_idle(state).await;
             }
         }
     }
@@ -721,9 +722,17 @@ impl Daemon {
                                     task.abort();
                                 }
 
+                                cleanup_output_mode_override();
                                 state = State::Idle;
                                 self.update_state("idle");
                                 self.play_feedback(SoundEvent::Cancelled);
+
+                                // Run post_output_command to reset compositor submap
+                                if let Some(cmd) = &self.config.output.post_output_command {
+                                    if let Err(e) = output::run_hook(cmd, "post_output").await {
+                                        tracing::warn!("{}", e);
+                                    }
+                                }
 
                                 if self.config.output.notification.on_recording_stop {
                                     send_notification("Cancelled", "Recording discarded").await;
@@ -736,9 +745,17 @@ impl Daemon {
                                     task.abort();
                                 }
 
+                                cleanup_output_mode_override();
                                 state = State::Idle;
                                 self.update_state("idle");
                                 self.play_feedback(SoundEvent::Cancelled);
+
+                                // Run post_output_command to reset compositor submap
+                                if let Some(cmd) = &self.config.output.post_output_command {
+                                    if let Err(e) = output::run_hook(cmd, "post_output").await {
+                                        tracing::warn!("{}", e);
+                                    }
+                                }
 
                                 if self.config.output.notification.on_recording_stop {
                                     send_notification("Cancelled", "Transcription aborted").await;
@@ -766,9 +783,17 @@ impl Daemon {
                             task.abort();
                         }
 
+                        cleanup_output_mode_override();
                         state = State::Idle;
                         self.update_state("idle");
                         self.play_feedback(SoundEvent::Cancelled);
+
+                        // Run post_output_command to reset compositor submap
+                        if let Some(cmd) = &self.config.output.post_output_command {
+                            if let Err(e) = output::run_hook(cmd, "post_output").await {
+                                tracing::warn!("{}", e);
+                            }
+                        }
 
                         if self.config.output.notification.on_recording_stop {
                             send_notification("Cancelled", "Recording discarded").await;
@@ -789,8 +814,16 @@ impl Daemon {
                             if let Some(mut capture) = audio_capture.take() {
                                 let _ = capture.stop().await;
                             }
+                            cleanup_output_mode_override();
                             state = State::Idle;
                             self.update_state("idle");
+
+                            // Run post_output_command to reset compositor submap
+                            if let Some(cmd) = &self.config.output.post_output_command {
+                                if let Err(e) = output::run_hook(cmd, "post_output").await {
+                                    tracing::warn!("{}", e);
+                                }
+                            }
                         }
                     }
                 }
@@ -908,9 +941,17 @@ impl Daemon {
                             task.abort();
                         }
 
+                        cleanup_output_mode_override();
                         state = State::Idle;
                         self.update_state("idle");
                         self.play_feedback(SoundEvent::Cancelled);
+
+                        // Run post_output_command to reset compositor submap
+                        if let Some(cmd) = &self.config.output.post_output_command {
+                            if let Err(e) = output::run_hook(cmd, "post_output").await {
+                                tracing::warn!("{}", e);
+                            }
+                        }
 
                         if self.config.output.notification.on_recording_stop {
                             send_notification("Cancelled", "Transcription aborted").await;
