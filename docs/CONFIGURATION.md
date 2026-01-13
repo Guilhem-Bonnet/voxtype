@@ -443,7 +443,7 @@ Benchmarks on AMD Radeon RX 7800 XT with large-v3-turbo:
 | Standard (`false`) | 0.49s avg | ~1.6 GB | 409 MB |
 | GPU Isolation (`true`) | 0.50s avg | 0 | 0 |
 
-The model loads while you speak (0.38-0.42s), so the additional latency is only ~10ms (2%) after recording stops. Users don't perceive any delay because model loading overlaps with speaking time.
+The model loads while you speak (0.38-0.42s), so the additional latency is only ~10ms (2%) after recording stops. The delay should be barely perceptible because model loading overlaps with speaking time.
 
 **Example:**
 ```toml
