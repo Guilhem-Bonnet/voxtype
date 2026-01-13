@@ -86,6 +86,8 @@
                 <div class="article-body">
                     <p>Voxtype 0.4.13 adds GPU memory isolation for laptop users with hybrid graphics.</p>
 
+                    <img src="../images/gpu-isolation.png" alt="GPU memory comparison: without gpu_isolation the GPU stays at 1.6GB, with gpu_isolation it drops to zero between transcriptions" style="max-width: 100%; height: auto; border-radius: 8px; margin: 1.5rem 0;">
+
                     <h3>GPU Isolation Mode</h3>
                     <p>When enabled, transcription runs in a subprocess that exits after each recording. This fully releases GPU memory between transcriptions, allowing your discrete GPU to power down when not in use.</p>
 
