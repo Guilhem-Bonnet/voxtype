@@ -6,7 +6,9 @@
 use super::Transcriber;
 use crate::config::ParakeetConfig;
 use crate::error::TranscribeError;
-use parakeet_rs::{Parakeet, Transcriber as ParakeetTranscriberTrait};
+use parakeet_rs::{ExecutionConfig, Parakeet, Transcriber as ParakeetTranscriberTrait};
+#[cfg(feature = "parakeet-cuda")]
+use parakeet_rs::ExecutionProvider;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -25,7 +27,17 @@ impl ParakeetTranscriber {
         tracing::info!("Loading Parakeet model from {:?}", model_path);
         let start = std::time::Instant::now();
 
-        let parakeet = Parakeet::from_pretrained(&model_path, None)
+        // Configure execution provider based on feature flags
+        #[cfg(feature = "parakeet-cuda")]
+        let exec_config = {
+            tracing::info!("Configuring CUDA execution provider for GPU acceleration");
+            Some(ExecutionConfig::new().with_execution_provider(ExecutionProvider::Cuda))
+        };
+
+        #[cfg(not(feature = "parakeet-cuda"))]
+        let exec_config: Option<ExecutionConfig> = None;
+
+        let parakeet = Parakeet::from_pretrained(&model_path, exec_config)
             .map_err(|e| TranscribeError::InitFailed(format!("Parakeet init failed: {}", e)))?;
 
         tracing::info!("Parakeet model loaded in {:.2}s", start.elapsed().as_secs_f32());
