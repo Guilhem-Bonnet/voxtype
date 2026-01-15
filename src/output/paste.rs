@@ -339,7 +339,7 @@ impl PasteOutput {
 
         // Only add delay parameter if configured
         if self.key_delay_ms > 0 {
-            cmd.arg(format!("-d {}", self.key_delay_ms));
+            cmd.arg("-d").arg(self.key_delay_ms.to_string());
         }
 
         let output = cmd
