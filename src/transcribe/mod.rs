@@ -14,7 +14,7 @@ pub mod worker;
 #[cfg(feature = "parakeet")]
 pub mod parakeet;
 
-use crate::config::{Config, TranscriptionBackend, WhisperBackend, WhisperConfig};
+use crate::config::{Config, TranscriptionEngine, WhisperConfig, WhisperMode};
 use crate::error::TranscribeError;
 
 /// Trait for speech-to-text implementations
@@ -36,22 +36,22 @@ pub trait Transcriber: Send + Sync {
     }
 }
 
-/// Factory function to create transcriber based on configured backend
+/// Factory function to create transcriber based on configured engine
 pub fn create_transcriber(config: &Config) -> Result<Box<dyn Transcriber>, TranscribeError> {
-    match config.backend {
-        TranscriptionBackend::Whisper => create_whisper_transcriber(&config.whisper),
+    match config.engine {
+        TranscriptionEngine::Whisper => create_whisper_transcriber(&config.whisper),
         #[cfg(feature = "parakeet")]
-        TranscriptionBackend::Parakeet => {
+        TranscriptionEngine::Parakeet => {
             let parakeet_config = config.parakeet.as_ref().ok_or_else(|| {
                 TranscribeError::InitFailed(
-                    "Parakeet backend selected but [parakeet] config section is missing".to_string(),
+                    "Parakeet engine selected but [parakeet] config section is missing".to_string(),
                 )
             })?;
             Ok(Box::new(parakeet::ParakeetTranscriber::new(parakeet_config)?))
         }
         #[cfg(not(feature = "parakeet"))]
-        TranscriptionBackend::Parakeet => Err(TranscribeError::InitFailed(
-            "Parakeet backend requested but voxtype was not compiled with --features parakeet"
+        TranscriptionEngine::Parakeet => Err(TranscribeError::InitFailed(
+            "Parakeet engine requested but voxtype was not compiled with --features parakeet"
                 .to_string(),
         )),
     }
@@ -70,8 +70,8 @@ pub fn create_transcriber_with_config_path(
     config: &WhisperConfig,
     config_path: Option<std::path::PathBuf>,
 ) -> Result<Box<dyn Transcriber>, TranscribeError> {
-    match config.backend {
-        WhisperBackend::Local => {
+    match config.effective_mode() {
+        WhisperMode::Local => {
             if config.gpu_isolation {
                 tracing::info!("Using subprocess-isolated whisper transcription (gpu_isolation=true)");
                 Ok(Box::new(subprocess::SubprocessTranscriber::new(
@@ -79,12 +79,12 @@ pub fn create_transcriber_with_config_path(
                     config_path,
                 )?))
             } else {
-                tracing::info!("Using local whisper transcription backend");
+                tracing::info!("Using local whisper transcription mode");
                 Ok(Box::new(whisper::WhisperTranscriber::new(config)?))
             }
         }
-        WhisperBackend::Remote => {
-            tracing::info!("Using remote whisper transcription backend");
+        WhisperMode::Remote => {
+            tracing::info!("Using remote whisper transcription mode");
             Ok(Box::new(remote::RemoteTranscriber::new(config)?))
         }
     }
