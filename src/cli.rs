@@ -178,6 +178,10 @@ pub enum RecordAction {
         /// Override output mode to paste (clipboard + Ctrl+V)
         #[arg(long, group = "output_mode")]
         paste: bool,
+
+        /// Use a specific model for this transcription (e.g., large-v3-turbo)
+        #[arg(long, value_name = "MODEL")]
+        model: Option<String>,
     },
     /// Stop recording and transcribe (send SIGUSR2 to daemon)
     Stop {
@@ -192,6 +196,10 @@ pub enum RecordAction {
         /// Override output mode to paste (clipboard + Ctrl+V)
         #[arg(long, group = "output_mode")]
         paste: bool,
+
+        /// Use a specific model for this transcription (e.g., large-v3-turbo)
+        #[arg(long, value_name = "MODEL")]
+        model: Option<String>,
     },
     /// Toggle recording state
     Toggle {
@@ -206,6 +214,10 @@ pub enum RecordAction {
         /// Override output mode to paste (clipboard + Ctrl+V)
         #[arg(long, group = "output_mode")]
         paste: bool,
+
+        /// Use a specific model for this transcription (e.g., large-v3-turbo)
+        #[arg(long, value_name = "MODEL")]
+        model: Option<String>,
     },
     /// Cancel current recording or transcription (discard without output)
     Cancel,
@@ -215,9 +227,9 @@ impl RecordAction {
     /// Extract the output mode override from the action flags
     pub fn output_mode_override(&self) -> Option<OutputModeOverride> {
         let (type_mode, clipboard, paste) = match self {
-            RecordAction::Start { type_mode, clipboard, paste } => (*type_mode, *clipboard, *paste),
-            RecordAction::Stop { type_mode, clipboard, paste } => (*type_mode, *clipboard, *paste),
-            RecordAction::Toggle { type_mode, clipboard, paste } => (*type_mode, *clipboard, *paste),
+            RecordAction::Start { type_mode, clipboard, paste, .. } => (*type_mode, *clipboard, *paste),
+            RecordAction::Stop { type_mode, clipboard, paste, .. } => (*type_mode, *clipboard, *paste),
+            RecordAction::Toggle { type_mode, clipboard, paste, .. } => (*type_mode, *clipboard, *paste),
             RecordAction::Cancel => return None,
         };
 
@@ -229,6 +241,16 @@ impl RecordAction {
             Some(OutputModeOverride::Paste)
         } else {
             None
+        }
+    }
+
+    /// Extract the model override from the action flags
+    pub fn model_override(&self) -> Option<&str> {
+        match self {
+            RecordAction::Start { model, .. } => model.as_deref(),
+            RecordAction::Stop { model, .. } => model.as_deref(),
+            RecordAction::Toggle { model, .. } => model.as_deref(),
+            RecordAction::Cancel => None,
         }
     }
 }
@@ -565,6 +587,52 @@ mod tests {
         match cli.command {
             Some(Commands::Record { action }) => {
                 assert_eq!(action.output_mode_override(), Some(OutputModeOverride::Paste));
+            }
+            _ => panic!("Expected Record command"),
+        }
+    }
+
+    #[test]
+    fn test_record_start_model_override() {
+        let cli = Cli::parse_from(["voxtype", "record", "start", "--model", "large-v3-turbo"]);
+        match cli.command {
+            Some(Commands::Record { action }) => {
+                assert_eq!(action.model_override(), Some("large-v3-turbo"));
+                assert_eq!(action.output_mode_override(), None);
+            }
+            _ => panic!("Expected Record command"),
+        }
+    }
+
+    #[test]
+    fn test_record_start_model_and_output_override() {
+        let cli = Cli::parse_from(["voxtype", "record", "start", "--model", "large-v3-turbo", "--clipboard"]);
+        match cli.command {
+            Some(Commands::Record { action }) => {
+                assert_eq!(action.model_override(), Some("large-v3-turbo"));
+                assert_eq!(action.output_mode_override(), Some(OutputModeOverride::Clipboard));
+            }
+            _ => panic!("Expected Record command"),
+        }
+    }
+
+    #[test]
+    fn test_record_toggle_model_override() {
+        let cli = Cli::parse_from(["voxtype", "record", "toggle", "--model", "medium.en"]);
+        match cli.command {
+            Some(Commands::Record { action }) => {
+                assert_eq!(action.model_override(), Some("medium.en"));
+            }
+            _ => panic!("Expected Record command"),
+        }
+    }
+
+    #[test]
+    fn test_record_cancel_no_model() {
+        let cli = Cli::parse_from(["voxtype", "record", "cancel"]);
+        match cli.command {
+            Some(Commands::Record { action }) => {
+                assert_eq!(action.model_override(), None);
             }
             _ => panic!("Expected Record command"),
         }
