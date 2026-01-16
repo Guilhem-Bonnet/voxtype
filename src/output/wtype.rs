@@ -20,17 +20,20 @@ pub struct WtypeOutput {
     notify: bool,
     /// Whether to send Enter key after output
     auto_submit: bool,
+    /// Delay between keystrokes in milliseconds
+    type_delay_ms: u32,
     /// Delay before typing starts (ms), allows virtual keyboard to initialize
-    delay_ms: u32,
+    pre_type_delay_ms: u32,
 }
 
 impl WtypeOutput {
     /// Create a new wtype output
-    pub fn new(notify: bool, auto_submit: bool, delay_ms: u32) -> Self {
+    pub fn new(notify: bool, auto_submit: bool, type_delay_ms: u32, pre_type_delay_ms: u32) -> Self {
         Self {
             notify,
             auto_submit,
-            delay_ms,
+            type_delay_ms,
+            pre_type_delay_ms,
         }
     }
 
@@ -66,11 +69,23 @@ impl TextOutput for WtypeOutput {
         }
 
         let mut cmd = Command::new("wtype");
+        let mut debug_args = vec!["wtype".to_string()];
 
-        // Add delay before typing if configured (helps prevent first character drop)
-        if self.delay_ms > 0 {
-            cmd.arg("-s").arg(self.delay_ms.to_string());
+        // Add pre-typing delay if configured (helps prevent first character drop)
+        if self.pre_type_delay_ms > 0 {
+            cmd.arg("-s").arg(self.pre_type_delay_ms.to_string());
+            debug_args.push(format!("-s {}", self.pre_type_delay_ms));
         }
+
+        // Add inter-keystroke delay if configured
+        if self.type_delay_ms > 0 {
+            cmd.arg("-d").arg(self.type_delay_ms.to_string());
+            debug_args.push(format!("-d {}", self.type_delay_ms));
+        }
+
+        debug_args.push("--".to_string());
+        debug_args.push(format!("\"{}\"", text.chars().take(20).collect::<String>()));
+        tracing::debug!("Running: {}", debug_args.join(" "));
 
         let output = cmd
             .arg("--")
@@ -144,24 +159,33 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let output = WtypeOutput::new(true, false, 0);
+        let output = WtypeOutput::new(true, false, 0, 0);
         assert!(output.notify);
         assert!(!output.auto_submit);
-        assert_eq!(output.delay_ms, 0);
+        assert_eq!(output.type_delay_ms, 0);
+        assert_eq!(output.pre_type_delay_ms, 0);
     }
 
     #[test]
     fn test_new_with_enter() {
-        let output = WtypeOutput::new(false, true, 0);
+        let output = WtypeOutput::new(false, true, 0, 0);
         assert!(!output.notify);
         assert!(output.auto_submit);
     }
 
     #[test]
-    fn test_new_with_delay() {
-        let output = WtypeOutput::new(false, false, 200);
+    fn test_new_with_type_delay() {
+        let output = WtypeOutput::new(false, false, 50, 0);
         assert!(!output.notify);
         assert!(!output.auto_submit);
-        assert_eq!(output.delay_ms, 200);
+        assert_eq!(output.type_delay_ms, 50);
+        assert_eq!(output.pre_type_delay_ms, 0);
+    }
+
+    #[test]
+    fn test_new_with_pre_type_delay() {
+        let output = WtypeOutput::new(false, false, 0, 200);
+        assert_eq!(output.type_delay_ms, 0);
+        assert_eq!(output.pre_type_delay_ms, 200);
     }
 }
