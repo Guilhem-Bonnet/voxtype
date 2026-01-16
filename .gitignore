@@ -21,8 +21,8 @@
 *.mp3
 
 # Claude Code
-.claude/
-CLAUDE.md
+.claude/settings.local.json
+CLAUDE.local.md
 
 # Packages
 *.deb
