@@ -698,14 +698,15 @@ journalctl --user -u voxtype --since "30 seconds ago" | grep -i transcri
 ### CLI Overrides
 
 ```bash
-# Output mode override
-voxtype record start --output clipboard
+# Output mode override (use --clipboard, --type, or --paste)
+voxtype record start --clipboard
 sleep 2
 voxtype record stop
 # Verify clipboard has text: wl-paste
 
 # Model override (requires model to be downloaded)
-voxtype record start --model base.en
+# Note: --model flag is on the main command, not record subcommand
+voxtype --model base.en record start
 sleep 2
 voxtype record stop
 ```
