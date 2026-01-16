@@ -15,11 +15,25 @@ struct ModelInfo {
 }
 
 const MODELS: &[ModelInfo] = &[
+    // Tiny models
+    ModelInfo {
+        name: "tiny",
+        size_mb: 75,
+        description: "Fastest, lowest accuracy",
+        english_only: false,
+    },
     ModelInfo {
         name: "tiny.en",
         size_mb: 39,
         description: "Fastest, lowest accuracy",
         english_only: true,
+    },
+    // Base models
+    ModelInfo {
+        name: "base",
+        size_mb: 142,
+        description: "Good balance (default)",
+        english_only: false,
     },
     ModelInfo {
         name: "base.en",
@@ -27,11 +41,25 @@ const MODELS: &[ModelInfo] = &[
         description: "Good balance (default)",
         english_only: true,
     },
+    // Small models
+    ModelInfo {
+        name: "small",
+        size_mb: 466,
+        description: "Better accuracy",
+        english_only: false,
+    },
     ModelInfo {
         name: "small.en",
         size_mb: 466,
         description: "Better accuracy",
         english_only: true,
+    },
+    // Medium models
+    ModelInfo {
+        name: "medium",
+        size_mb: 1500,
+        description: "High accuracy",
+        english_only: false,
     },
     ModelInfo {
         name: "medium.en",
@@ -39,16 +67,17 @@ const MODELS: &[ModelInfo] = &[
         description: "High accuracy",
         english_only: true,
     },
+    // Large models
     ModelInfo {
         name: "large-v3",
         size_mb: 3100,
-        description: "Best accuracy, multilingual",
+        description: "Best accuracy",
         english_only: false,
     },
     ModelInfo {
         name: "large-v3-turbo",
         size_mb: 1600,
-        description: "Fast + accurate, multilingual (recommended for GPU)",
+        description: "Fast + accurate (recommended for GPU)",
         english_only: false,
     },
 ];
@@ -430,10 +459,17 @@ language = "en"
     #[test]
     fn test_models_list_contains_expected_models() {
         let model_names: Vec<&str> = MODELS.iter().map(|m| m.name).collect();
+        // Multilingual models
+        assert!(model_names.contains(&"tiny"));
+        assert!(model_names.contains(&"base"));
+        assert!(model_names.contains(&"small"));
+        assert!(model_names.contains(&"medium"));
+        // English-only models
         assert!(model_names.contains(&"tiny.en"));
         assert!(model_names.contains(&"base.en"));
         assert!(model_names.contains(&"small.en"));
         assert!(model_names.contains(&"medium.en"));
+        // Large models (multilingual only)
         assert!(model_names.contains(&"large-v3"));
         assert!(model_names.contains(&"large-v3-turbo"));
     }
@@ -443,8 +479,8 @@ language = "en"
         for model in MODELS {
             // All models should have positive size
             assert!(model.size_mb > 0, "Model {} has invalid size", model.name);
-            // Tiny should be smallest, large should be biggest
-            if model.name == "tiny.en" {
+            // Tiny models should be smallest, large should be biggest
+            if model.name.starts_with("tiny") {
                 assert!(model.size_mb < 100);
             }
             if model.name == "large-v3" {
@@ -455,11 +491,17 @@ language = "en"
 
     #[test]
     fn test_is_valid_model() {
-        // Valid models
+        // Valid multilingual models
+        assert!(is_valid_model("tiny"));
+        assert!(is_valid_model("base"));
+        assert!(is_valid_model("small"));
+        assert!(is_valid_model("medium"));
+        // Valid English-only models
         assert!(is_valid_model("tiny.en"));
         assert!(is_valid_model("base.en"));
         assert!(is_valid_model("small.en"));
         assert!(is_valid_model("medium.en"));
+        // Valid large models
         assert!(is_valid_model("large-v3"));
         assert!(is_valid_model("large-v3-turbo"));
 
