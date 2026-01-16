@@ -173,6 +173,22 @@ voxtype record toggle  # Toggle recording state
 voxtype record cancel  # Cancel recording or transcription in progress
 ```
 
+**Model override:** Use `--model` to specify which model to use for this recording:
+
+```bash
+voxtype record start --model large-v3-turbo  # Use a specific model
+voxtype record stop                          # Transcribes with the model specified at start
+```
+
+The model must be configured as `model`, `secondary_model`, or listed in `available_models` in your config. See [Multi-Model Configuration](CONFIGURATION.md#secondary_model) for setup.
+
+**Output mode override:** Use `--type`, `--clipboard`, or `--paste` to override the output mode:
+
+```bash
+voxtype record start --clipboard  # Output to clipboard instead of typing
+voxtype record toggle --paste     # Use paste mode for this recording
+```
+
 This command is designed for use with compositor keybindings (Hyprland, Sway) instead of the built-in hotkey detection. See [Compositor Keybindings](#compositor-keybindings) for setup instructions.
 
 ---
