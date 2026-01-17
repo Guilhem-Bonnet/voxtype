@@ -6,11 +6,13 @@
 //! - Interactive model selection
 //! - Output chain detection
 //! - GPU backend management
+//! - Parakeet backend management
 //! - Compositor integration (modifier key fix)
 
 pub mod compositor;
 pub mod gpu;
 pub mod model;
+pub mod parakeet;
 pub mod systemd;
 pub mod waybar;
 

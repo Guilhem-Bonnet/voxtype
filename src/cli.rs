@@ -23,9 +23,10 @@ COMMANDS:
   voxtype config           Show current configuration
 
 EXAMPLES:
-  voxtype setup model      Interactive model selection
+  voxtype setup model      Interactive model selection (Whisper or Parakeet)
   voxtype setup waybar     Show Waybar integration config
-  voxtype setup gpu        Manage GPU acceleration
+  voxtype setup gpu        Manage GPU acceleration (Vulkan)
+  voxtype setup parakeet   Switch between Whisper and Parakeet engines
   voxtype status --follow --format json   Waybar integration
 
 See 'voxtype <command> --help' for more info on a command.
@@ -310,6 +311,21 @@ pub enum SetupAction {
         disable: bool,
 
         /// Show current backend status
+        #[arg(long)]
+        status: bool,
+    },
+
+    /// Switch between Whisper and Parakeet transcription engines
+    Parakeet {
+        /// Enable Parakeet engine (switch to Parakeet binary)
+        #[arg(long)]
+        enable: bool,
+
+        /// Disable Parakeet engine (switch back to Whisper binary)
+        #[arg(long)]
+        disable: bool,
+
+        /// Show current Parakeet backend status
         #[arg(long)]
         status: bool,
     },

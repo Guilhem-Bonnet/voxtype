@@ -199,6 +199,18 @@ async fn main() -> anyhow::Result<()> {
                         setup::gpu::show_status();
                     }
                 }
+                Some(SetupAction::Parakeet { enable, disable, status }) => {
+                    if status {
+                        setup::parakeet::show_status();
+                    } else if enable {
+                        setup::parakeet::enable()?;
+                    } else if disable {
+                        setup::parakeet::disable()?;
+                    } else {
+                        // Default: show status
+                        setup::parakeet::show_status();
+                    }
+                }
                 Some(SetupAction::Compositor { compositor_type }) => {
                     setup::compositor::run(&compositor_type).await?;
                 }
