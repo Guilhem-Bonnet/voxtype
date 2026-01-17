@@ -138,62 +138,21 @@ pub fn valid_model_names() -> Vec<&'static str> {
     MODELS.iter().map(|m| m.name).collect()
 }
 
-/// Run interactive engine and model selection
+/// Run interactive model selection (single menu with all models)
 pub async fn interactive_select() -> anyhow::Result<()> {
     println!("Voxtype Model Selection\n");
     println!("=======================\n");
 
-    // Check if parakeet feature is enabled
-    let parakeet_available = cfg!(feature = "parakeet");
-
-    println!("Select transcription engine:\n");
-    println!("  [1] Whisper  - OpenAI's speech recognition (99+ languages)");
-
-    if parakeet_available {
-        println!("  [2] Parakeet - NVIDIA FastConformer (English, faster)");
-    } else {
-        println!("  \x1b[90m[2] Parakeet - (not available, rebuild with --features parakeet)\x1b[0m");
-    }
-
-    println!("\n  [0] Cancel\n");
-
-    print!("Select engine [1]: ");
-    io::stdout().flush()?;
-
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-
-    let selection: usize = input.trim().parse().unwrap_or(1);
-
-    match selection {
-        0 => {
-            println!("\nCancelled.");
-            Ok(())
-        }
-        1 | _ if selection > 2 => interactive_select_whisper().await,
-        2 if parakeet_available => interactive_select_parakeet().await,
-        2 => {
-            println!("\nParakeet support is not available in this build.");
-            println!("Rebuild with: cargo build --features parakeet");
-            Ok(())
-        }
-        _ => {
-            println!("\nCancelled.");
-            Ok(())
-        }
-    }
-}
-
-/// Run interactive Whisper model selection
-async fn interactive_select_whisper() -> anyhow::Result<()> {
-    println!("\nWhisper Models\n");
-    println!("--------------\n");
-
     let models_dir = Config::models_dir();
     println!("Models directory: {:?}\n", models_dir);
 
-    // Show available models with status
-    println!("Available Whisper Models:\n");
+    let parakeet_available = cfg!(feature = "parakeet");
+    let whisper_count = MODELS.len();
+    let parakeet_count = PARAKEET_MODELS.len();
+    let total_count = whisper_count + if parakeet_available { parakeet_count } else { 0 };
+
+    // --- Whisper Section ---
+    println!("--- Whisper (OpenAI, 99+ languages) ---\n");
 
     for (i, model) in MODELS.iter().enumerate() {
         let filename = get_model_filename(model.name);
@@ -206,33 +165,79 @@ async fn interactive_select_whisper() -> anyhow::Result<()> {
             ""
         };
 
-        let lang = if model.english_only {
-            "English"
-        } else {
-            "Multilingual"
-        };
+        let lang = if model.english_only { "en" } else { "multi" };
 
         println!(
-            "  [{:>2}] {:<16} ({:>4} MB) - {} ({}) {}",
+            "  [{:>2}] {:<16} ({:>4} MB) {} - {} {}",
             i + 1,
             model.name,
             model.size_mb,
-            model.description,
             lang,
+            model.description,
             status
         );
+    }
+
+    // --- Parakeet Section ---
+    println!("\n--- Parakeet (NVIDIA FastConformer, English) ---\n");
+
+    if parakeet_available {
+        for (i, model) in PARAKEET_MODELS.iter().enumerate() {
+            let model_path = models_dir.join(model.name);
+            let installed = model_path.exists() && validate_parakeet_model(&model_path).is_ok();
+
+            let status = if installed {
+                "\x1b[32m[installed]\x1b[0m"
+            } else {
+                ""
+            };
+
+            println!(
+                "  [{:>2}] {:<28} ({:>4} MB) - {} {}",
+                whisper_count + i + 1,
+                model.name,
+                model.size_mb,
+                model.description,
+                status
+            );
+        }
+    } else {
+        println!("  \x1b[90m(not available - rebuild with --features parakeet)\x1b[0m");
     }
 
     println!("\n  [ 0] Cancel\n");
 
     // Get user selection
-    print!("Select model to download [0-{}]: ", MODELS.len());
+    print!("Select model [0-{}]: ", total_count);
     io::stdout().flush()?;
 
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
 
     let selection: usize = input.trim().parse().unwrap_or(0);
+
+    if selection == 0 {
+        println!("\nCancelled.");
+        return Ok(());
+    }
+
+    // Route to appropriate handler based on selection
+    if selection <= whisper_count {
+        // Whisper model selected
+        handle_whisper_selection(selection).await
+    } else if parakeet_available && selection <= total_count {
+        // Parakeet model selected
+        let parakeet_index = selection - whisper_count;
+        handle_parakeet_selection(parakeet_index).await
+    } else {
+        println!("\nInvalid selection.");
+        Ok(())
+    }
+}
+
+/// Handle Whisper model selection (download/config)
+async fn handle_whisper_selection(selection: usize) -> anyhow::Result<()> {
+    let models_dir = Config::models_dir();
 
     if selection == 0 || selection > MODELS.len() {
         println!("\nCancelled.");
@@ -296,47 +301,9 @@ async fn interactive_select_whisper() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Run interactive Parakeet model selection
-async fn interactive_select_parakeet() -> anyhow::Result<()> {
-    println!("\nParakeet Models (EXPERIMENTAL)\n");
-    println!("------------------------------\n");
-
+/// Handle Parakeet model selection (download/config)
+async fn handle_parakeet_selection(selection: usize) -> anyhow::Result<()> {
     let models_dir = Config::models_dir();
-    println!("Models directory: {:?}\n", models_dir);
-
-    // Show available models with status
-    println!("Available Parakeet Models:\n");
-
-    for (i, model) in PARAKEET_MODELS.iter().enumerate() {
-        let model_path = models_dir.join(model.name);
-        let installed = model_path.exists() && validate_parakeet_model(&model_path).is_ok();
-
-        let status = if installed {
-            "\x1b[32m[installed]\x1b[0m"
-        } else {
-            ""
-        };
-
-        println!(
-            "  [{:>2}] {:<28} ({:>4} MB) - {} {}",
-            i + 1,
-            model.name,
-            model.size_mb,
-            model.description,
-            status
-        );
-    }
-
-    println!("\n  [ 0] Cancel\n");
-
-    // Get user selection
-    print!("Select model to download [0-{}]: ", PARAKEET_MODELS.len());
-    io::stdout().flush()?;
-
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-
-    let selection: usize = input.trim().parse().unwrap_or(0);
 
     if selection == 0 || selection > PARAKEET_MODELS.len() {
         println!("\nCancelled.");
