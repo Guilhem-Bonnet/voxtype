@@ -649,12 +649,54 @@ async fn show_config(config: &config::Config) -> anyhow::Result<()> {
     println!("  theme = {:?}", config.audio.feedback.theme);
     println!("  volume = {}", config.audio.feedback.volume);
 
+    // Show current engine
+    println!("\n[engine]");
+    println!("  engine = {:?}", config.engine);
+
     println!("\n[whisper]");
     println!("  model = {:?}", config.whisper.model);
     println!("  language = {:?}", config.whisper.language);
     println!("  translate = {}", config.whisper.translate);
     if let Some(threads) = config.whisper.threads {
         println!("  threads = {}", threads);
+    }
+
+    // Show Parakeet status (experimental)
+    println!("\n[parakeet] (EXPERIMENTAL)");
+    if let Some(ref parakeet_config) = config.parakeet {
+        println!("  model = {:?}", parakeet_config.model);
+        if let Some(ref model_type) = parakeet_config.model_type {
+            println!("  model_type = {:?}", model_type);
+        }
+        println!("  on_demand_loading = {}", parakeet_config.on_demand_loading);
+    } else {
+        println!("  (not configured)");
+    }
+
+    // Check for available Parakeet models
+    let models_dir = config::Config::models_dir();
+    let mut parakeet_models: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&models_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.contains("parakeet") {
+                    // Check if it has the required ONNX files
+                    let has_encoder = path.join("encoder-model.onnx").exists();
+                    let has_decoder = path.join("decoder_joint-model.onnx").exists()
+                        || path.join("model.onnx").exists();
+                    if has_encoder || has_decoder {
+                        parakeet_models.push(name);
+                    }
+                }
+            }
+        }
+    }
+    if parakeet_models.is_empty() {
+        println!("  available models: (none found)");
+    } else {
+        println!("  available models: {}", parakeet_models.join(", "));
     }
 
     println!("\n[output]");

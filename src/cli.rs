@@ -60,7 +60,7 @@ pub struct Cli {
     #[arg(long)]
     pub no_whisper_context_optimization: bool,
 
-    /// Override transcription engine (whisper or parakeet)
+    /// Override transcription engine: "whisper" (default) or "parakeet" (EXPERIMENTAL)
     #[arg(long, value_name = "ENGINE")]
     pub engine: Option<String>,
 

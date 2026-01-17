@@ -386,11 +386,23 @@ Building on modern CPUs (Zen 4, etc.) can leak AVX-512/GFNI instructions into bi
 
 ### Build Strategy
 
+**Whisper Binaries:**
+
 | Binary | Build Location | Why |
 |--------|---------------|-----|
-| AVX2 | Docker (Ubuntu 22.04) | Clean toolchain, no AVX-512 contamination |
+| AVX2 | Docker on remote pre-AVX-512 server | Clean toolchain, no AVX-512 contamination |
 | Vulkan | Docker on remote pre-AVX-512 server | GPU build on CPU without AVX-512 |
 | AVX512 | Local machine | Requires AVX-512 capable host |
+
+**Parakeet Binaries (Experimental):**
+
+| Binary | Build Location | Why |
+|--------|---------------|-----|
+| parakeet-avx2 | Docker on remote pre-AVX-512 server | Wide CPU compatibility |
+| parakeet-avx512 | Local machine | Best CPU performance |
+| parakeet-cuda | Docker on remote server with NVIDIA GPU | GPU acceleration |
+
+Note: Parakeet binaries include bundled ONNX Runtime which contains AVX-512 instructions, but ONNX Runtime uses runtime CPU detection and falls back gracefully on older CPUs.
 
 ### GPU Feature Flags
 
@@ -439,28 +451,40 @@ Docker caches build layers aggressively. Without `--no-cache`, you may upload bi
 
 ```bash
 # Set version
-export VERSION=0.4.5
+export VERSION=0.5.0
 
-# 1. Build AVX2 + Vulkan on remote server (no AVX-512 contamination)
+# 1. Build Whisper binaries (AVX2 + Vulkan) on remote server
 docker context use <your-remote-context>
 docker compose -f docker-compose.build.yml build --no-cache avx2 vulkan
 docker compose -f docker-compose.build.yml up avx2 vulkan
 
-# 2. Copy binaries from containers
-docker cp voxtype-avx2-1:/output/. releases/${VERSION}/
-docker cp voxtype-vulkan-1:/output/. releases/${VERSION}/
+# 2. Build Parakeet binaries on remote server
+docker compose -f docker-compose.build.yml build --no-cache parakeet-avx2
+docker compose -f docker-compose.build.yml up parakeet-avx2
 
-# 3. Build AVX-512 locally (requires AVX-512 capable CPU)
+# 3. Copy binaries from remote Docker volumes to local
+mkdir -p releases/${VERSION}
+docker run --rm -v $(pwd)/releases/${VERSION}:/test ubuntu:24.04 ls /test  # verify
+# Use tar pipe to copy from remote Docker volume:
+docker run --rm -v $(pwd)/releases/${VERSION}:/src ubuntu:24.04 tar -cf - -C /src . | tar -xf - -C releases/${VERSION}/
+
+# 4. Build AVX-512 binaries locally (requires AVX-512 capable CPU)
 docker context use default
+
+# Whisper AVX-512
 cargo clean && cargo build --release
 cp target/release/voxtype releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-avx512
 
-# 4. VERIFY VERSIONS before uploading (critical!)
-releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-avx2 --version
-releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-avx512 --version
-releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-vulkan --version
+# Parakeet AVX-512
+cargo clean && RUSTFLAGS="-C target-cpu=native" cargo build --release --features parakeet
+cp target/release/voxtype releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-parakeet-avx512
 
-# 5. Validate instruction sets and package
+# 5. VERIFY VERSIONS before uploading (critical!)
+for bin in releases/${VERSION}/voxtype-*; do
+  echo -n "$(basename $bin): "; $bin --version
+done
+
+# 6. Validate instruction sets and package
 ./scripts/package.sh --skip-build ${VERSION}
 ```
 
@@ -469,10 +493,14 @@ releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-vulkan --version
 **Before uploading any release, verify ALL binaries report the correct version:**
 
 ```bash
-# All three should print the same version matching $VERSION
-releases/${VERSION}/voxtype-*-avx2 --version
-releases/${VERSION}/voxtype-*-avx512 --version
-releases/${VERSION}/voxtype-*-vulkan --version
+# Whisper binaries
+releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-avx2 --version
+releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-avx512 --version
+releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-vulkan --version
+
+# Parakeet binaries (experimental)
+releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-parakeet-avx2 --version
+releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-parakeet-avx512 --version
 ```
 
 If versions don't match, the Docker cache is stale. Rebuild with `--no-cache`.
