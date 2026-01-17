@@ -50,6 +50,30 @@ services:
     profiles:
       - avx512  # Only build if explicitly requested (requires AVX-512 capable host)
 
+  # Parakeet AVX2 build (ONNX Runtime bundled, wide compatibility)
+  parakeet-avx2:
+    build:
+      context: .
+      dockerfile: Dockerfile.parakeet
+      args:
+        VERSION: ${VERSION:-0.5.0-beta.3}
+    volumes:
+      - ./releases/${VERSION:-0.5.0-beta.3}:/output
+    environment:
+      - VERSION=${VERSION:-0.5.0-beta.3}
+
+  # Parakeet CUDA build (NVIDIA GPU acceleration with CPU fallback)
+  parakeet-cuda:
+    build:
+      context: .
+      dockerfile: Dockerfile.parakeet-cuda
+      args:
+        VERSION: ${VERSION:-0.5.0-beta.3}
+    volumes:
+      - ./releases/${VERSION:-0.5.0-beta.3}:/output
+    environment:
+      - VERSION=${VERSION:-0.5.0-beta.3}
+
   # All-in-one build (AVX2 + Vulkan)
   all:
     build:

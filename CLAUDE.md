@@ -499,6 +499,25 @@ What to look for:
 - `{1to4}`, `{1to8}`, `{1to16}` = AVX-512 broadcast syntax
 - `vgf2p8`, `gf2p8` = GFNI instructions (not on Zen 3)
 
+### Parakeet Binary Instruction Leakage
+
+**IMPORTANT: Parakeet binaries also need AVX-512 instruction checks**, even when built on pre-AVX-512 hardware.
+
+The `ort` crate downloads prebuilt ONNX Runtime binaries that may contain AVX-512 instructions regardless of the build host's CPU. This is different from Whisper builds where the leakage comes from system libraries.
+
+```bash
+# Check Parakeet binaries for AVX-512 leakage
+objdump -d voxtype-*-parakeet-avx2 | grep -c zmm
+# If >0, the ONNX Runtime contains AVX-512 instructions
+```
+
+**Mitigation options:**
+1. **Accept fallback behavior** - ONNX Runtime will fall back to non-AVX-512 code paths at runtime on unsupported CPUs (may cause slight performance penalty)
+2. **Build ONNX Runtime from source** - Use `ORT_STRATEGY=build` to compile ONNX Runtime with specific CPU flags (significantly increases build time)
+3. **Use `load-dynamic` feature** - Link against system ONNX Runtime instead of bundled (requires users to install ONNX Runtime separately)
+
+For now, Parakeet binaries may contain AVX-512 instructions from ONNX Runtime but should still run on pre-AVX-512 CPUs via runtime fallback. Test on target hardware to verify.
+
 ### Packaging Deb and RPM
 
 After binaries are built and validated:
