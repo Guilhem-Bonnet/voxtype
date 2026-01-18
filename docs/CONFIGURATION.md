@@ -601,9 +601,9 @@ Controls how transcribed text is delivered.
 Primary output method.
 
 **Values:**
-- `type` - Simulate keyboard input at cursor position (requires wtype or ydotool)
+- `type` - Simulate keyboard input at cursor position (uses wtype, dotool, or ydotool)
 - `clipboard` - Copy text to clipboard (requires wl-copy)
-- `paste` - Copy to clipboard then simulate paste keystroke (requires wl-copy, and wtype or ydotool)
+- `paste` - Copy to clipboard then simulate paste keystroke (requires wl-copy, and wtype, dotool, or ydotool)
 
 **Example:**
 ```toml
@@ -611,8 +611,14 @@ Primary output method.
 mode = "paste"
 ```
 
+**Note about wtype compatibility:**
+wtype does not work on KDE Plasma or GNOME Wayland because these compositors don't support the virtual keyboard protocol. On these desktops, voxtype automatically falls back to dotool (if installed) or ydotool. For ydotool, the daemon must be running (`systemctl --user enable --now ydotool`). See [Troubleshooting](TROUBLESHOOTING.md#wtype-not-working-on-kde-plasma-or-gnome-wayland) for details.
+
+**Note about non-US keyboard layouts:**
+For non-US keyboard layouts (German QWERTZ, French AZERTY, etc.), dotool is recommended over ydotool. Set `dotool_xkb_layout` to your layout code (e.g., `"de"` for German). ydotool does not support keyboard layouts and will produce incorrect characters (e.g., 'y' and 'z' swapped on German layouts).
+
 **Note about paste mode:**
-The `paste` mode is designed to work around non-US keyboard layout issues. Instead of typing characters directly (which assumes US keyboard layout), it copies text to the clipboard and then simulates a paste keystroke. This works regardless of keyboard layout. Requires wl-copy for clipboard access, plus wtype (preferred, no daemon needed) or ydotool (requires ydotoold daemon) for keystroke simulation.
+The `paste` mode is an alternative for non-US keyboard layouts. Instead of typing characters directly, it copies text to the clipboard and simulates a paste keystroke. This works regardless of keyboard layout but overwrites your clipboard. Requires wl-copy for clipboard access.
 
 ### paste_keys
 
@@ -656,6 +662,45 @@ When `true` and `mode = "type"`, falls back to clipboard if typing fails.
 [output]
 mode = "type"
 fallback_to_clipboard = true  # Use clipboard if ydotool fails
+```
+
+### dotool_xkb_layout
+
+**Type:** String (optional)
+**Default:** None
+**Required:** No
+
+Keyboard layout for dotool output driver. Required for non-US keyboard layouts (German, French, etc.) when using dotool as the typing backend.
+
+dotool is automatically used as a fallback when wtype fails (e.g., on GNOME/KDE Wayland). Unlike ydotool, dotool supports keyboard layouts via XKB environment variables.
+
+**Common values:**
+- `"de"` - German (QWERTZ)
+- `"fr"` - French (AZERTY)
+- `"es"` - Spanish
+- `"uk"` - Ukrainian
+- `"ru"` - Russian
+
+**Example:**
+```toml
+[output]
+mode = "type"
+dotool_xkb_layout = "de"  # German keyboard layout
+```
+
+### dotool_xkb_variant
+
+**Type:** String (optional)
+**Default:** None
+**Required:** No
+
+Keyboard layout variant for dotool. Use this for layout variations like `nodeadkeys`.
+
+**Example:**
+```toml
+[output]
+dotool_xkb_layout = "de"
+dotool_xkb_variant = "nodeadkeys"  # German without dead keys
 ```
 
 ---
@@ -710,6 +755,22 @@ Delay in milliseconds between each typed character. Increase if characters are b
 ```toml
 [output]
 type_delay_ms = 10  # 10ms delay between characters
+```
+
+### pre_type_delay_ms
+
+**Type:** Integer
+**Default:** `0`
+**Required:** No
+
+Delay in milliseconds before typing starts. This allows the virtual keyboard to initialize and helps prevent the first character from being dropped on some compositors. Try 100-200ms if you experience issues.
+
+> **Note:** When using compositor integration (via `voxtype setup compositor`), best results come from not binding Escape in the submap. Some users have had success with Escape bound by increasing this delay, but the most consistent fix is to use F12 or another key instead.
+
+**Example:**
+```toml
+[output]
+pre_type_delay_ms = 100  # 100ms delay before typing starts
 ```
 
 ### auto_submit
@@ -1392,3 +1453,14 @@ remote_timeout_secs = 30
 ```
 
 > **Note**: Cloud-based transcription sends your audio to third-party servers. See [User Manual - Remote Whisper Servers](USER_MANUAL.md#remote-whisper-servers) for privacy considerations.
+
+---
+
+## Deprecated Options
+
+The following configuration options are deprecated but still supported for backwards compatibility. They will log a warning when used.
+
+| Deprecated Option | Replacement | Notes |
+|-------------------|-------------|-------|
+| `wtype_delay_ms` | `pre_type_delay_ms` | Renamed for clarity (applies to all output drivers, not just wtype) |
+| `--wtype-delay` CLI flag | `--pre-type-delay` | CLI equivalent of the above |

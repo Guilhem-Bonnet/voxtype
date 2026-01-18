@@ -52,7 +52,7 @@ pub struct Cli {
     #[arg(long)]
     pub paste: bool,
 
-    /// Override whisper model (tiny, base, small, medium, large-v3, large-v3-turbo)
+    /// Override whisper model (tiny, tiny.en, base, base.en, small, small.en, medium, medium.en, large-v3, large-v3-turbo)
     #[arg(long, value_name = "MODEL")]
     pub model: Option<String>,
 
@@ -68,8 +68,12 @@ pub struct Cli {
     #[arg(long)]
     pub toggle: bool,
 
-    /// Delay before wtype starts typing (ms), helps prevent first character drop
+    /// Delay before typing starts (ms), helps prevent first character drop
     #[arg(long, value_name = "MS")]
+    pub pre_type_delay: Option<u32>,
+
+    /// DEPRECATED: Use --pre-type-delay instead
+    #[arg(long, value_name = "MS", hide = true)]
     pub wtype_delay: Option<u32>,
 
     #[command(subcommand)]

@@ -9,6 +9,7 @@ Solutions to common issues when using Voxtype.
 - [Audio Problems](#audio-problems)
 - [Transcription Issues](#transcription-issues)
 - [Output Problems](#output-problems)
+  - [wtype not working on KDE Plasma or GNOME Wayland](#wtype-not-working-on-kde-plasma-or-gnome-wayland)
 - [Performance Issues](#performance-issues)
 - [Systemd Service Issues](#systemd-service-issues)
 - [Debug Mode](#debug-mode)
@@ -287,6 +288,74 @@ This is rarely needed. The optimization speeds up transcription for short clips 
 ---
 
 ## Output Problems
+
+### wtype not working on KDE Plasma or GNOME Wayland
+
+**Symptom:** wtype fails with "Compositor does not support the virtual keyboard protocol"
+
+**Cause:** KDE Plasma and GNOME do not implement the `zwp_virtual_keyboard_v1` Wayland protocol that wtype requires. This is a compositor limitation, not a voxtype bug.
+
+**What happens:** Voxtype detects this failure and automatically falls back to dotool, then ydotool. If neither is set up, it falls back to clipboard mode.
+
+**Solution 1 (Recommended):** Install dotool. Unlike ydotool, dotool does not require a daemon and supports keyboard layouts for non-US keyboards:
+
+```bash
+# 1. Install dotool (check your distribution's package manager)
+# Arch (AUR):
+yay -S dotool
+# From source: https://sr.ht/~geb/dotool/
+
+# 2. Add user to input group (required for uinput access)
+sudo usermod -aG input $USER
+# Log out and back in for group change to take effect
+
+# 3. Configure keyboard layout if needed (non-US keyboards)
+# Add to config.toml:
+# [output]
+# dotool_xkb_layout = "de"  # German, French ("fr"), etc.
+```
+
+**Solution 2:** Set up ydotool as your typing backend. Unlike dotool, ydotool requires a daemon to be running:
+
+```bash
+# 1. Install ydotool
+# Arch:
+sudo pacman -S ydotool
+# Fedora:
+sudo dnf install ydotool
+# Ubuntu/Debian:
+sudo apt install ydotool
+
+# 2. Enable and start the daemon (required!)
+systemctl --user enable --now ydotool
+
+# 3. Verify it's running
+systemctl --user status ydotool
+```
+
+**Important:** For ydotool, simply having it installed is not enough. The daemon must be running for the fallback to work.
+
+**Alternative:** Use clipboard or paste mode instead of type mode:
+
+```toml
+[output]
+mode = "clipboard"  # Copies to clipboard, you paste manually
+# or
+mode = "paste"      # Copies to clipboard, then simulates Ctrl+V
+```
+
+**Compositor compatibility:**
+
+| Desktop | wtype | dotool | ydotool | Recommended |
+|---------|-------|--------|---------|-------------|
+| Hyprland | ✓ | ✓ | ✓ | wtype |
+| Sway | ✓ | ✓ | ✓ | wtype |
+| River | ✓ | ✓ | ✓ | wtype |
+| KDE Plasma (Wayland) | ✗ | ✓ | ✓ | dotool |
+| GNOME (Wayland) | ✗ | ✓ | ✓ | dotool |
+| X11 (any desktop) | ✗ | ✓ | ✓ | dotool |
+
+---
 
 ### "ydotool daemon not running"
 
