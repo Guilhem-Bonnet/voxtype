@@ -16,6 +16,10 @@ async fn main() -> anyhow::Result<()> {
     // and provide a helpful error message instead of core dumping
     cpu::install_sigill_handler();
 
+    // Reset SIGPIPE to default behavior (terminate silently) to avoid panics
+    // when output is piped through commands like `head` that close the pipe early
+    reset_sigpipe();
+
     let cli = Cli::parse();
 
     // Check if this is the worker command (needs stderr-only logging)
@@ -760,4 +764,19 @@ async fn show_config(config: &config::Config) -> anyhow::Result<()> {
     println!("Models dir: {:?}", config::Config::models_dir());
 
     Ok(())
+}
+
+/// Reset SIGPIPE to default behavior (terminate process) instead of the Rust
+/// default of ignoring it. This prevents panics when stdout is piped through
+/// commands like `head` that close the pipe early.
+#[cfg(unix)]
+fn reset_sigpipe() {
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
+#[cfg(not(unix))]
+fn reset_sigpipe() {
+    // No-op on non-Unix platforms
 }
