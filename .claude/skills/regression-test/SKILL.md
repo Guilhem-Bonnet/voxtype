@@ -13,6 +13,8 @@ allowed-tools:
 
 Comprehensive testing checklist for voxtype releases.
 
+**Note:** For detailed manual smoke tests (recording cycles, GPU isolation, output drivers, etc.), see [docs/SMOKE_TESTS.md](docs/SMOKE_TESTS.md). Run those tests for thorough pre-release validation.
+
 ## Quick Smoke Test
 
 ```bash
