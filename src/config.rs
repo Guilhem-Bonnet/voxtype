@@ -313,6 +313,14 @@ fn default_context_window_optimization() -> bool {
     true
 }
 
+fn default_whisper_model() -> String {
+    "base.en".to_string()
+}
+
+fn default_whisper_language() -> String {
+    "auto".to_string()
+}
+
 impl Default for AudioFeedbackConfig {
     fn default() -> Self {
         Self {
@@ -528,9 +536,11 @@ pub struct WhisperConfig {
 
     /// Model name: tiny, base, small, medium, large-v3, large-v3-turbo
     /// Can also be an absolute path to a .bin file
+    #[serde(default = "default_whisper_model")]
     pub model: String,
 
     /// Language code (en, es, fr, auto, etc.)
+    #[serde(default = "default_whisper_language")]
     pub language: String,
 
     /// Translate to English if source language is not English
