@@ -377,23 +377,23 @@ impl Daemon {
                         self.transcription_task = Some(tokio::task::spawn_blocking(move || {
                             t.transcribe(&samples)
                         }));
-                        return true;
+                        true
                     } else {
                         tracing::error!("No transcriber available");
                         self.play_feedback(SoundEvent::Error);
                         self.reset_to_idle(state).await;
-                        return false;
+                        false
                     }
                 }
                 Err(e) => {
                     tracing::warn!("Recording error: {}", e);
                     self.reset_to_idle(state).await;
-                    return false;
+                    false
                 }
             }
         } else {
             self.reset_to_idle(state).await;
-            return false;
+            false
         }
     }
 
