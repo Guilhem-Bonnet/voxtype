@@ -22,10 +22,21 @@ use std::time::Duration;
 use tokio::process::Command;
 use tokio::signal::unix::{signal, SignalKind};
 
-/// Send a desktop notification
-async fn send_notification(title: &str, body: &str) {
+/// Send a desktop notification with optional engine icon
+async fn send_notification(title: &str, body: &str, show_engine_icon: bool, engine: crate::config::TranscriptionEngine) {
+    let title = if show_engine_icon {
+        format!("{} {}", crate::output::engine_icon(engine), title)
+    } else {
+        title.to_string()
+    };
+
     let _ = Command::new("notify-send")
-        .args(["--app-name=Voxtype", "--expire-time=2000", title, body])
+        .args([
+            "--app-name=Voxtype",
+            "--expire-time=2000",
+            &title,
+            body,
+        ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -384,7 +395,7 @@ impl Daemon {
 
         // Send notification if enabled
         if self.config.output.notification.on_recording_stop {
-            send_notification("Recording Stopped", "Transcribing...").await;
+            send_notification("Recording Stopped", "Transcribing...", self.config.output.notification.show_engine_icon, self.config.engine).await;
         }
 
         // Stop recording and get samples
@@ -540,6 +551,13 @@ impl Daemon {
                             .await
                     {
                         tracing::error!("Output failed: {}", e);
+                    } else if self.config.output.notification.on_transcription {
+                        // Send notification on successful output
+                        output::send_transcription_notification(
+                            &final_text,
+                            self.config.output.notification.show_engine_icon,
+                            self.config.engine,
+                        ).await;
                     }
 
                     *state = State::Idle;
@@ -640,15 +658,25 @@ impl Daemon {
         );
         drop(default_chain); // Not used; chain is created per-transcription
 
-        // Initialize model manager for multi-model support
+        // Initialize model manager for multi-model support (Whisper only)
         let mut model_manager = ModelManager::new(&self.config.whisper, self.config_path.clone());
 
-        // Preload primary model if configured (handles on_demand_loading and gpu_isolation checks internally)
-        if !self.config.whisper.on_demand_loading {
-            tracing::info!("Loading transcription model: {}", self.config.whisper.model);
-            if let Err(e) = model_manager.preload_primary() {
-                tracing::error!("Failed to preload model: {}", e);
-                return Err(crate::error::VoxtypeError::Transcribe(e));
+        // Pre-load transcription model if on_demand_loading is disabled
+        let mut transcriber_preloaded: Option<Arc<dyn Transcriber>> = None;
+        if !self.config.on_demand_loading() {
+            tracing::info!("Loading transcription model: {}", self.config.model_name());
+            match self.config.engine {
+                crate::config::TranscriptionEngine::Whisper => {
+                    // Use model manager for Whisper
+                    if let Err(e) = model_manager.preload_primary() {
+                        tracing::error!("Failed to preload model: {}", e);
+                        return Err(crate::error::VoxtypeError::Transcribe(e));
+                    }
+                }
+                crate::config::TranscriptionEngine::Parakeet => {
+                    // Parakeet uses its own model loading
+                    transcriber_preloaded = Some(Arc::from(crate::transcribe::create_transcriber(&self.config)?));
+                }
             }
             tracing::info!("Model loaded, ready for voice input");
         } else {
@@ -717,25 +745,47 @@ impl Daemon {
 
                                 // Send notification if enabled
                                 if self.config.output.notification.on_recording_start {
-                                    send_notification("Push to Talk Active", "Recording...").await;
+                                    send_notification("Push to Talk Active", "Recording...", self.config.output.notification.show_engine_icon, self.config.engine).await;
                                 }
 
                                 // Prepare model for transcription
-                                if let Some(ref mut mm) = self.model_manager {
-                                    if self.config.whisper.on_demand_loading {
-                                        // Start model loading in background
-                                        let config = self.config.whisper.clone();
-                                        let config_path = self.config_path.clone();
-                                        let model_to_load = model_override.clone();
-                                        self.model_load_task = Some(tokio::task::spawn_blocking(move || {
-                                            let mut temp_manager = ModelManager::new(&config, config_path);
-                                            temp_manager.get_transcriber(model_to_load.as_deref())
-                                        }));
-                                        tracing::debug!("Started background model loading");
-                                    } else {
-                                        // Prepare model (spawns subprocess for gpu_isolation mode)
-                                        if let Err(e) = mm.prepare_model(model_override.as_deref()) {
-                                            tracing::warn!("Failed to prepare model: {}", e);
+                                if self.config.on_demand_loading() {
+                                    // Start model loading in background
+                                    match self.config.engine {
+                                        crate::config::TranscriptionEngine::Whisper => {
+                                            let config = self.config.whisper.clone();
+                                            let config_path = self.config_path.clone();
+                                            let model_to_load = model_override.clone();
+                                            self.model_load_task = Some(tokio::task::spawn_blocking(move || {
+                                                let mut temp_manager = ModelManager::new(&config, config_path);
+                                                temp_manager.get_transcriber(model_to_load.as_deref())
+                                            }));
+                                        }
+                                        crate::config::TranscriptionEngine::Parakeet => {
+                                            let config = self.config.clone();
+                                            self.model_load_task = Some(tokio::task::spawn_blocking(move || {
+                                                crate::transcribe::create_transcriber(&config).map(Arc::from)
+                                            }));
+                                        }
+                                    }
+                                    tracing::debug!("Started background model loading");
+                                } else {
+                                    // Prepare model (spawns subprocess for gpu_isolation mode)
+                                    match self.config.engine {
+                                        crate::config::TranscriptionEngine::Whisper => {
+                                            if let Some(ref mut mm) = self.model_manager {
+                                                if let Err(e) = mm.prepare_model(model_override.as_deref()) {
+                                                    tracing::warn!("Failed to prepare model: {}", e);
+                                                }
+                                            }
+                                        }
+                                        crate::config::TranscriptionEngine::Parakeet => {
+                                            if let Some(ref t) = transcriber_preloaded {
+                                                let transcriber = t.clone();
+                                                tokio::task::spawn_blocking(move || {
+                                                    transcriber.prepare();
+                                                });
+                                            }
                                         }
                                     }
                                 }
@@ -777,8 +827,7 @@ impl Daemon {
                             tracing::debug!("Received HotkeyEvent::Released (push-to-talk), state.is_recording() = {}", state.is_recording());
                             if let State::Recording { model_override, .. } = &state {
                                 // Get transcriber for this recording
-                                let transcriber = if self.config.whisper.on_demand_loading {
-                                    // Use transcriber from background loading task
+                                let transcriber = if self.config.on_demand_loading() {
                                     if let Some(task) = self.model_load_task.take() {
                                         match task.await {
                                             Ok(Ok(transcriber)) => {
@@ -847,25 +896,47 @@ impl Daemon {
                                 tracing::info!("Recording started (toggle mode)");
 
                                 if self.config.output.notification.on_recording_start {
-                                    send_notification("Recording Started", "Press hotkey again to stop").await;
+                                    send_notification("Recording Started", "Press hotkey again to stop", self.config.output.notification.show_engine_icon, self.config.engine).await;
                                 }
 
                                 // Prepare model for transcription
-                                if let Some(ref mut mm) = self.model_manager {
-                                    if self.config.whisper.on_demand_loading {
-                                        // Start model loading in background
-                                        let config = self.config.whisper.clone();
-                                        let config_path = self.config_path.clone();
-                                        let model_to_load = model_override.clone();
-                                        self.model_load_task = Some(tokio::task::spawn_blocking(move || {
-                                            let mut temp_manager = ModelManager::new(&config, config_path);
-                                            temp_manager.get_transcriber(model_to_load.as_deref())
-                                        }));
-                                        tracing::debug!("Started background model loading");
-                                    } else {
-                                        // Prepare model (spawns subprocess for gpu_isolation mode)
-                                        if let Err(e) = mm.prepare_model(model_override.as_deref()) {
-                                            tracing::warn!("Failed to prepare model: {}", e);
+                                if self.config.on_demand_loading() {
+                                    // Start model loading in background
+                                    match self.config.engine {
+                                        crate::config::TranscriptionEngine::Whisper => {
+                                            let config = self.config.whisper.clone();
+                                            let config_path = self.config_path.clone();
+                                            let model_to_load = model_override.clone();
+                                            self.model_load_task = Some(tokio::task::spawn_blocking(move || {
+                                                let mut temp_manager = ModelManager::new(&config, config_path);
+                                                temp_manager.get_transcriber(model_to_load.as_deref())
+                                            }));
+                                        }
+                                        crate::config::TranscriptionEngine::Parakeet => {
+                                            let config = self.config.clone();
+                                            self.model_load_task = Some(tokio::task::spawn_blocking(move || {
+                                                crate::transcribe::create_transcriber(&config).map(Arc::from)
+                                            }));
+                                        }
+                                    }
+                                    tracing::debug!("Started background model loading");
+                                } else {
+                                    // Prepare model (spawns subprocess for gpu_isolation mode)
+                                    match self.config.engine {
+                                        crate::config::TranscriptionEngine::Whisper => {
+                                            if let Some(ref mut mm) = self.model_manager {
+                                                if let Err(e) = mm.prepare_model(model_override.as_deref()) {
+                                                    tracing::warn!("Failed to prepare model: {}", e);
+                                                }
+                                            }
+                                        }
+                                        crate::config::TranscriptionEngine::Parakeet => {
+                                            if let Some(ref t) = transcriber_preloaded {
+                                                let transcriber = t.clone();
+                                                tokio::task::spawn_blocking(move || {
+                                                    transcriber.prepare();
+                                                });
+                                            }
                                         }
                                     }
                                 }
@@ -899,8 +970,7 @@ impl Daemon {
                                 }
                             } else if let State::Recording { model_override: current_model_override, .. } = &state {
                                 // Get transcriber for this recording
-                                let transcriber = if self.config.whisper.on_demand_loading {
-                                    // Use transcriber from background loading task
+                                let transcriber = if self.config.on_demand_loading() {
                                     if let Some(task) = self.model_load_task.take() {
                                         match task.await {
                                             Ok(Ok(transcriber)) => {
@@ -996,7 +1066,7 @@ impl Daemon {
                                 }
 
                                 if self.config.output.notification.on_recording_stop {
-                                    send_notification("Cancelled", "Recording discarded").await;
+                                    send_notification("Cancelled", "Recording discarded", self.config.output.notification.show_engine_icon, self.config.engine).await;
                                 }
                             } else if matches!(state, State::Transcribing { .. }) {
                                 tracing::info!("Transcription cancelled via hotkey");
@@ -1020,7 +1090,7 @@ impl Daemon {
                                 }
 
                                 if self.config.output.notification.on_recording_stop {
-                                    send_notification("Cancelled", "Transcription aborted").await;
+                                    send_notification("Cancelled", "Transcription aborted", self.config.output.notification.show_engine_icon, self.config.engine).await;
                                 }
                             } else {
                                 tracing::trace!("Cancel ignored - not recording or transcribing");
@@ -1059,7 +1129,7 @@ impl Daemon {
                         }
 
                         if self.config.output.notification.on_recording_stop {
-                            send_notification("Cancelled", "Recording discarded").await;
+                            send_notification("Cancelled", "Recording discarded", self.config.output.notification.show_engine_icon, self.config.engine).await;
                         }
 
                         continue;
@@ -1101,24 +1171,46 @@ impl Daemon {
                         tracing::info!("Recording started (external trigger), model_override = {:?}", model_override);
 
                         if self.config.output.notification.on_recording_start {
-                            send_notification("Recording Started", "External trigger").await;
+                            send_notification("Recording Started", "External trigger", self.config.output.notification.show_engine_icon, self.config.engine).await;
                         }
 
                         // Prepare model for transcription
-                        if let Some(ref mut mm) = self.model_manager {
-                            if self.config.whisper.on_demand_loading {
-                                // Start model loading in background
-                                let config = self.config.whisper.clone();
-                                let config_path = self.config_path.clone();
-                                let model_to_load = model_override.clone();
-                                self.model_load_task = Some(tokio::task::spawn_blocking(move || {
-                                    let mut temp_manager = ModelManager::new(&config, config_path);
-                                    temp_manager.get_transcriber(model_to_load.as_deref())
-                                }));
-                            } else {
-                                // Prepare model (spawns subprocess for gpu_isolation mode)
-                                if let Err(e) = mm.prepare_model(model_override.as_deref()) {
-                                    tracing::warn!("Failed to prepare model: {}", e);
+                        if self.config.on_demand_loading() {
+                            // Start model loading in background
+                            match self.config.engine {
+                                crate::config::TranscriptionEngine::Whisper => {
+                                    let config = self.config.whisper.clone();
+                                    let config_path = self.config_path.clone();
+                                    let model_to_load = model_override.clone();
+                                    self.model_load_task = Some(tokio::task::spawn_blocking(move || {
+                                        let mut temp_manager = ModelManager::new(&config, config_path);
+                                        temp_manager.get_transcriber(model_to_load.as_deref())
+                                    }));
+                                }
+                                crate::config::TranscriptionEngine::Parakeet => {
+                                    let config = self.config.clone();
+                                    self.model_load_task = Some(tokio::task::spawn_blocking(move || {
+                                        crate::transcribe::create_transcriber(&config).map(Arc::from)
+                                    }));
+                                }
+                            }
+                        } else {
+                            // Prepare model (spawns subprocess for gpu_isolation mode)
+                            match self.config.engine {
+                                crate::config::TranscriptionEngine::Whisper => {
+                                    if let Some(ref mut mm) = self.model_manager {
+                                        if let Err(e) = mm.prepare_model(model_override.as_deref()) {
+                                            tracing::warn!("Failed to prepare model: {}", e);
+                                        }
+                                    }
+                                }
+                                crate::config::TranscriptionEngine::Parakeet => {
+                                    if let Some(ref t) = transcriber_preloaded {
+                                        let transcriber = t.clone();
+                                        tokio::task::spawn_blocking(move || {
+                                            transcriber.prepare();
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -1157,8 +1249,7 @@ impl Daemon {
                     tracing::debug!("Received SIGUSR2 (stop recording)");
                     if let State::Recording { model_override, .. } = &state {
                         // Get transcriber for this recording
-                        let transcriber = if self.config.whisper.on_demand_loading {
-                            // Use transcriber from background loading task
+                        let transcriber = if self.config.on_demand_loading() {
                             if let Some(task) = self.model_load_task.take() {
                                 match task.await {
                                     Ok(Ok(transcriber)) => {
@@ -1252,7 +1343,7 @@ impl Daemon {
                         }
 
                         if self.config.output.notification.on_recording_stop {
-                            send_notification("Cancelled", "Transcription aborted").await;
+                            send_notification("Cancelled", "Transcription aborted", self.config.output.notification.show_engine_icon, self.config.engine).await;
                         }
                     }
                 }

@@ -16,6 +16,10 @@ async fn main() -> anyhow::Result<()> {
     // and provide a helpful error message instead of core dumping
     cpu::install_sigill_handler();
 
+    // Reset SIGPIPE to default behavior (terminate silently) to avoid panics
+    // when output is piped through commands like `head` that close the pipe early
+    reset_sigpipe();
+
     let cli = Cli::parse();
 
     // Check if this is the worker command (needs stderr-only logging)
@@ -82,6 +86,16 @@ async fn main() -> anyhow::Result<()> {
                     &format!("Unknown model '{}', using '{}'", model, default_model),
                 ])
                 .spawn();
+        }
+    }
+    if let Some(engine) = cli.engine {
+        match engine.to_lowercase().as_str() {
+            "whisper" => config.engine = config::TranscriptionEngine::Whisper,
+            "parakeet" => config.engine = config::TranscriptionEngine::Parakeet,
+            _ => {
+                eprintln!("Error: Invalid engine '{}'. Valid options: whisper, parakeet", engine);
+                std::process::exit(1);
+            }
         }
     }
     if let Some(hotkey) = cli.hotkey {
@@ -199,6 +213,18 @@ async fn main() -> anyhow::Result<()> {
                     } else {
                         // Default: show status
                         setup::gpu::show_status();
+                    }
+                }
+                Some(SetupAction::Parakeet { enable, disable, status }) => {
+                    if status {
+                        setup::parakeet::show_status();
+                    } else if enable {
+                        setup::parakeet::enable()?;
+                    } else if disable {
+                        setup::parakeet::disable()?;
+                    } else {
+                        // Default: show status
+                        setup::parakeet::show_status();
                     }
                 }
                 Some(SetupAction::Compositor { compositor_type }) => {
@@ -394,7 +420,7 @@ fn transcribe_file(config: &config::Config, path: &PathBuf) -> anyhow::Result<()
     );
 
     // Create transcriber and transcribe
-    let transcriber = transcribe::create_transcriber(&config.whisper)?;
+    let transcriber = transcribe::create_transcriber(&config)?;
     let text = transcriber.transcribe(&final_samples)?;
 
     println!("\n{}", text);
@@ -675,12 +701,54 @@ async fn show_config(config: &config::Config) -> anyhow::Result<()> {
     println!("  theme = {:?}", config.audio.feedback.theme);
     println!("  volume = {}", config.audio.feedback.volume);
 
+    // Show current engine
+    println!("\n[engine]");
+    println!("  engine = {:?}", config.engine);
+
     println!("\n[whisper]");
     println!("  model = {:?}", config.whisper.model);
     println!("  language = {:?}", config.whisper.language);
     println!("  translate = {}", config.whisper.translate);
     if let Some(threads) = config.whisper.threads {
         println!("  threads = {}", threads);
+    }
+
+    // Show Parakeet status (experimental)
+    println!("\n[parakeet] (EXPERIMENTAL)");
+    if let Some(ref parakeet_config) = config.parakeet {
+        println!("  model = {:?}", parakeet_config.model);
+        if let Some(ref model_type) = parakeet_config.model_type {
+            println!("  model_type = {:?}", model_type);
+        }
+        println!("  on_demand_loading = {}", parakeet_config.on_demand_loading);
+    } else {
+        println!("  (not configured)");
+    }
+
+    // Check for available Parakeet models
+    let models_dir = config::Config::models_dir();
+    let mut parakeet_models: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&models_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.contains("parakeet") {
+                    // Check if it has the required ONNX files
+                    let has_encoder = path.join("encoder-model.onnx").exists();
+                    let has_decoder = path.join("decoder_joint-model.onnx").exists()
+                        || path.join("model.onnx").exists();
+                    if has_encoder || has_decoder {
+                        parakeet_models.push(name);
+                    }
+                }
+            }
+        }
+    }
+    if parakeet_models.is_empty() {
+        println!("  available models: (none found)");
+    } else {
+        println!("  available models: {}", parakeet_models.join(", "));
     }
 
     println!("\n[output]");
@@ -734,4 +802,19 @@ async fn show_config(config: &config::Config) -> anyhow::Result<()> {
     println!("Models dir: {:?}", config::Config::models_dir());
 
     Ok(())
+}
+
+/// Reset SIGPIPE to default behavior (terminate process) instead of the Rust
+/// default of ignoring it. This prevents panics when stdout is piped through
+/// commands like `head` that close the pipe early.
+#[cfg(unix)]
+fn reset_sigpipe() {
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
+#[cfg(not(unix))]
+fn reset_sigpipe() {
+    // No-op on non-Unix platforms
 }

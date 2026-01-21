@@ -6,11 +6,13 @@
 //! - Interactive model selection
 //! - Output chain detection
 //! - GPU backend management
+//! - Parakeet backend management
 //! - Compositor integration (modifier key fix)
 
 pub mod compositor;
 pub mod gpu;
 pub mod model;
+pub mod parakeet;
 pub mod systemd;
 pub mod waybar;
 
@@ -425,17 +427,18 @@ pub async fn run_setup(
         }
     }
 
-    // Check/download whisper model
-    if !quiet {
-        println!("\nWhisper model...");
-    }
     let models_dir = Config::models_dir();
 
-    // Use model_override if provided, otherwise use config default
+    // Check if model_override is a Parakeet model
+    let is_parakeet = model_override
+        .map(|name| model::is_parakeet_model(name))
+        .unwrap_or(false);
+
+    // Use model_override if provided, otherwise use config default (for Whisper)
     let model_name: &str = match model_override {
         Some(name) => {
-            // Validate the model name
-            if !model::is_valid_model(name) {
+            // Validate the model name (check both Whisper and Parakeet)
+            if !model::is_valid_model(name) && !model::is_parakeet_model(name) {
                 let valid = model::valid_model_names().join(", ");
                 anyhow::bail!("Unknown model '{}'. Valid models are: {}", name, valid);
             }
@@ -444,38 +447,129 @@ pub async fn run_setup(
         None => &config.whisper.model,
     };
 
-    let model_filename = crate::transcribe::whisper::get_model_filename(model_name);
-    let model_path = models_dir.join(&model_filename);
+    if is_parakeet {
+        // Handle Parakeet model
+        #[allow(unused_variables)]
+        let model_name = model_override.unwrap(); // Safe: is_parakeet implies Some
 
-    if model_path.exists() {
         if !quiet {
-            let size = std::fs::metadata(&model_path)
-                .map(|m| m.len() as f64 / 1024.0 / 1024.0)
-                .unwrap_or(0.0);
-            print_success(&format!("Model ready: {} ({:.0} MB)", model_name, size));
+            println!("\nParakeet model (EXPERIMENTAL)...");
         }
-        // If user explicitly requested this model, update config even if already downloaded
-        if model_override.is_some() {
-            model::set_model_config(model_name)?;
-            if !quiet {
-                print_success(&format!("Config updated to use '{}'", model_name));
+
+        // Check if parakeet feature is enabled
+        #[cfg(not(feature = "parakeet"))]
+        {
+            print_failure(&format!("Parakeet model '{}' requires the 'parakeet' feature", model_name));
+            println!("       Rebuild with: cargo build --features parakeet");
+            anyhow::bail!("Parakeet feature not enabled");
+        }
+
+        #[cfg(feature = "parakeet")]
+        {
+            let model_path = models_dir.join(model_name);
+            let model_valid = model_path.exists()
+                && model::validate_parakeet_model(&model_path).is_ok();
+
+            if model_valid {
+                if !quiet {
+                    let size = std::fs::read_dir(&model_path)
+                        .map(|entries| {
+                            entries
+                                .flatten()
+                                .filter_map(|e| e.metadata().ok())
+                                .map(|m| m.len() as f64 / 1024.0 / 1024.0)
+                                .sum::<f64>()
+                        })
+                        .unwrap_or(0.0);
+                    print_success(&format!(
+                        "Model ready: {} ({:.0} MB)",
+                        model_name, size
+                    ));
+                }
+                // Update config to use Parakeet
+                model::set_parakeet_config(model_name)?;
+                if !quiet {
+                    print_success(&format!(
+                        "Config updated: engine = \"parakeet\", model = \"{}\"",
+                        model_name
+                    ));
+                }
+            } else if download {
+                model::download_parakeet_model(model_name)?;
+                // Update config to use Parakeet
+                model::set_parakeet_config(model_name)?;
+                if !quiet {
+                    print_success(&format!(
+                        "Config updated: engine = \"parakeet\", model = \"{}\"",
+                        model_name
+                    ));
+                }
+            } else if !quiet {
+                print_info(&format!("Model '{}' not downloaded yet", model_name));
+                println!("       Run: voxtype setup --download --model {}", model_name);
             }
         }
-    } else if download {
+    } else {
+        // Handle Whisper model
         if !quiet {
-            println!("  Downloading {}...", model_name);
+            println!("\nWhisper model...");
         }
-        model::download_model(model_name)?;
-        // Update config to use the downloaded model
-        if model_override.is_some() {
-            model::set_model_config(model_name)?;
-            if !quiet {
-                print_success(&format!("Config updated to use '{}'", model_name));
+
+        // Use model_override if provided, otherwise use config default
+        let model_name: &str = match model_override {
+            Some(name) => {
+                // Validate the model name
+                if !model::is_valid_model(name) {
+                    let whisper_models = model::valid_model_names().join(", ");
+                    let parakeet_models = model::valid_parakeet_model_names().join(", ");
+                    anyhow::bail!(
+                        "Unknown model '{}'. Valid Whisper models: {}. Valid Parakeet models: {}",
+                        name,
+                        whisper_models,
+                        parakeet_models
+                    );
+                }
+                name
             }
+            None => &config.whisper.model,
+        };
+
+        let model_filename = crate::transcribe::whisper::get_model_filename(model_name);
+        let model_path = models_dir.join(&model_filename);
+
+        if model_path.exists() {
+            if !quiet {
+                let size = std::fs::metadata(&model_path)
+                    .map(|m| m.len() as f64 / 1024.0 / 1024.0)
+                    .unwrap_or(0.0);
+                print_success(&format!(
+                    "Model ready: {} ({:.0} MB)",
+                    model_name, size
+                ));
+            }
+            // If user explicitly requested this model, update config even if already downloaded
+            if model_override.is_some() {
+                model::set_model_config(model_name)?;
+                if !quiet {
+                    print_success(&format!("Config updated to use '{}'", model_name));
+                }
+            }
+        } else if download {
+            if !quiet {
+                println!("  Downloading {}...", model_name);
+            }
+            model::download_model(model_name)?;
+            // Update config to use the downloaded model
+            if model_override.is_some() {
+                model::set_model_config(model_name)?;
+                if !quiet {
+                    print_success(&format!("Config updated to use '{}'", model_name));
+                }
+            }
+        } else if !quiet {
+            print_info(&format!("Model '{}' not downloaded yet", model_name));
+            println!("       Run: voxtype setup --download");
         }
-    } else if !quiet {
-        print_info(&format!("Model '{}' not downloaded yet", model_name));
-        println!("       Run: voxtype setup --download");
     }
 
     // Summary
@@ -603,6 +697,66 @@ pub async fn run_checks(config: &Config) -> anyhow::Result<()> {
         print_failure(&format!("Model '{}' not found", model_name));
         println!("       Run: voxtype setup --download");
         all_ok = false;
+    }
+
+    // Check Parakeet models (experimental)
+    println!("\nParakeet Models (EXPERIMENTAL):");
+
+    // Find available Parakeet models
+    let mut parakeet_models: Vec<(String, u64)> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&models_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.contains("parakeet") {
+                    // Check if it has the required ONNX files
+                    let encoder_path = path.join("encoder-model.onnx");
+                    let has_encoder = encoder_path.exists();
+                    let has_decoder = path.join("decoder_joint-model.onnx").exists()
+                        || path.join("model.onnx").exists();
+                    if has_encoder || has_decoder {
+                        // Get total size of model files
+                        let size = std::fs::read_dir(&path)
+                            .map(|entries| {
+                                entries
+                                    .flatten()
+                                    .filter_map(|e| e.metadata().ok())
+                                    .map(|m| m.len())
+                                    .sum()
+                            })
+                            .unwrap_or(0);
+                        parakeet_models.push((name, size));
+                    }
+                }
+            }
+        }
+    }
+
+    if parakeet_models.is_empty() {
+        print_info("No Parakeet models found");
+        println!("       See docs/PARAKEET.md for download instructions");
+    } else {
+        for (name, size) in &parakeet_models {
+            let size_mb = *size as f64 / 1024.0 / 1024.0;
+            print_success(&format!("Model '{}' installed ({:.0} MB)", name, size_mb));
+        }
+    }
+
+    // Check if Parakeet is configured but model is missing
+    if config.engine == crate::config::TranscriptionEngine::Parakeet {
+        if let Some(ref parakeet_config) = config.parakeet {
+            let configured_model = &parakeet_config.model;
+            let model_found = parakeet_models.iter().any(|(name, _)| name == configured_model);
+            if !model_found {
+                print_failure(&format!("Configured Parakeet model '{}' not found", configured_model));
+                println!("       Download the model or change config to use an available model");
+                all_ok = false;
+            }
+        } else {
+            print_failure("Engine set to 'parakeet' but [parakeet] config section is missing");
+            all_ok = false;
+        }
     }
 
     // Summary

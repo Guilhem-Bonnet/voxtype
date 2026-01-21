@@ -6,7 +6,7 @@
 //! - Fresh subprocess per model (when gpu_isolation = true)
 //! - Remote backend model selection
 
-use crate::config::{WhisperBackend, WhisperConfig};
+use crate::config::{WhisperMode, WhisperConfig};
 use crate::error::TranscribeError;
 use crate::transcribe::{self, Transcriber};
 use std::collections::HashMap;
@@ -84,7 +84,7 @@ impl ModelManager {
         }
 
         // For remote backend, create transcriber with model override
-        if self.config.backend == WhisperBackend::Remote {
+        if self.config.effective_mode() == WhisperMode::Remote {
             return self.create_remote_transcriber(&model_name);
         }
 
@@ -212,7 +212,7 @@ impl ModelManager {
             return Ok(());
         }
 
-        if self.config.backend == WhisperBackend::Remote {
+        if self.config.effective_mode() == WhisperMode::Remote {
             tracing::debug!("Skipping primary model preload (remote backend)");
             return Ok(());
         }
@@ -242,7 +242,7 @@ impl ModelManager {
         }
 
         // For GPU isolation, spawn subprocess early
-        if self.config.gpu_isolation && self.config.backend == WhisperBackend::Local {
+        if self.config.gpu_isolation && self.config.effective_mode() == WhisperMode::Local {
             // Create and prepare subprocess transcriber
             let transcriber = self.create_subprocess_transcriber(&model_name)?;
             transcriber.prepare();
@@ -299,7 +299,7 @@ mod tests {
 
     fn test_config() -> WhisperConfig {
         WhisperConfig {
-            backend: WhisperBackend::Local,
+            mode: Some(WhisperMode::Local),
             model: "base.en".to_string(),
             threads: Some(4),
             secondary_model: Some("large-v3-turbo".to_string()),

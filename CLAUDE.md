@@ -392,11 +392,23 @@ Building on modern CPUs (Zen 4, etc.) can leak AVX-512/GFNI instructions into bi
 
 ### Build Strategy
 
+**Whisper Binaries:**
+
 | Binary | Build Location | Why |
 |--------|---------------|-----|
-| AVX2 | Docker (Ubuntu 22.04) | Clean toolchain, no AVX-512 contamination |
+| AVX2 | Docker on remote pre-AVX-512 server | Clean toolchain, no AVX-512 contamination |
 | Vulkan | Docker on remote pre-AVX-512 server | GPU build on CPU without AVX-512 |
 | AVX512 | Local machine | Requires AVX-512 capable host |
+
+**Parakeet Binaries (Experimental):**
+
+| Binary | Build Location | Why |
+|--------|---------------|-----|
+| parakeet-avx2 | Docker on remote pre-AVX-512 server | Wide CPU compatibility |
+| parakeet-avx512 | Local machine | Best CPU performance |
+| parakeet-cuda | Docker on remote server with NVIDIA GPU | GPU acceleration |
+
+Note: Parakeet binaries include bundled ONNX Runtime which contains AVX-512 instructions, but ONNX Runtime uses runtime CPU detection and falls back gracefully on older CPUs.
 
 ### GPU Feature Flags
 
@@ -445,28 +457,40 @@ Docker caches build layers aggressively. Without `--no-cache`, you may upload bi
 
 ```bash
 # Set version
-export VERSION=0.4.5
+export VERSION=0.5.0
 
-# 1. Build AVX2 + Vulkan on remote server (no AVX-512 contamination)
+# 1. Build Whisper binaries (AVX2 + Vulkan) on remote server
 docker context use <your-remote-context>
 docker compose -f docker-compose.build.yml build --no-cache avx2 vulkan
 docker compose -f docker-compose.build.yml up avx2 vulkan
 
-# 2. Copy binaries from containers
-docker cp voxtype-avx2-1:/output/. releases/${VERSION}/
-docker cp voxtype-vulkan-1:/output/. releases/${VERSION}/
+# 2. Build Parakeet binaries on remote server
+docker compose -f docker-compose.build.yml build --no-cache parakeet-avx2
+docker compose -f docker-compose.build.yml up parakeet-avx2
 
-# 3. Build AVX-512 locally (requires AVX-512 capable CPU)
+# 3. Copy binaries from remote Docker volumes to local
+mkdir -p releases/${VERSION}
+docker run --rm -v $(pwd)/releases/${VERSION}:/test ubuntu:24.04 ls /test  # verify
+# Use tar pipe to copy from remote Docker volume:
+docker run --rm -v $(pwd)/releases/${VERSION}:/src ubuntu:24.04 tar -cf - -C /src . | tar -xf - -C releases/${VERSION}/
+
+# 4. Build AVX-512 binaries locally (requires AVX-512 capable CPU)
 docker context use default
+
+# Whisper AVX-512
 cargo clean && cargo build --release
 cp target/release/voxtype releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-avx512
 
-# 4. VERIFY VERSIONS before uploading (critical!)
-releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-avx2 --version
-releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-avx512 --version
-releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-vulkan --version
+# Parakeet AVX-512
+cargo clean && RUSTFLAGS="-C target-cpu=native" cargo build --release --features parakeet
+cp target/release/voxtype releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-parakeet-avx512
 
-# 5. Validate instruction sets and package
+# 5. VERIFY VERSIONS before uploading (critical!)
+for bin in releases/${VERSION}/voxtype-*; do
+  echo -n "$(basename $bin): "; $bin --version
+done
+
+# 6. Validate instruction sets and package
 ./scripts/package.sh --skip-build ${VERSION}
 ```
 
@@ -475,10 +499,14 @@ releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-vulkan --version
 **Before uploading any release, verify ALL binaries report the correct version:**
 
 ```bash
-# All three should print the same version matching $VERSION
-releases/${VERSION}/voxtype-*-avx2 --version
-releases/${VERSION}/voxtype-*-avx512 --version
-releases/${VERSION}/voxtype-*-vulkan --version
+# Whisper binaries
+releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-avx2 --version
+releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-avx512 --version
+releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-vulkan --version
+
+# Parakeet binaries (experimental)
+releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-parakeet-avx2 --version
+releases/${VERSION}/voxtype-${VERSION}-linux-x86_64-parakeet-avx512 --version
 ```
 
 If versions don't match, the Docker cache is stale. Rebuild with `--no-cache`.
@@ -504,6 +532,25 @@ What to look for:
 - `vpternlog`, `vpermt2`, `vpblendm` = AVX-512 specific instructions
 - `{1to4}`, `{1to8}`, `{1to16}` = AVX-512 broadcast syntax
 - `vgf2p8`, `gf2p8` = GFNI instructions (not on Zen 3)
+
+### Parakeet Binary Instruction Leakage
+
+**IMPORTANT: Parakeet binaries also need AVX-512 instruction checks**, even when built on pre-AVX-512 hardware.
+
+The `ort` crate downloads prebuilt ONNX Runtime binaries that may contain AVX-512 instructions regardless of the build host's CPU. This is different from Whisper builds where the leakage comes from system libraries.
+
+```bash
+# Check Parakeet binaries for AVX-512 leakage
+objdump -d voxtype-*-parakeet-avx2 | grep -c zmm
+# If >0, the ONNX Runtime contains AVX-512 instructions
+```
+
+**Mitigation options:**
+1. **Accept fallback behavior** - ONNX Runtime will fall back to non-AVX-512 code paths at runtime on unsupported CPUs (may cause slight performance penalty)
+2. **Build ONNX Runtime from source** - Use `ORT_STRATEGY=build` to compile ONNX Runtime with specific CPU flags (significantly increases build time)
+3. **Use `load-dynamic` feature** - Link against system ONNX Runtime instead of bundled (requires users to install ONNX Runtime separately)
+
+For now, Parakeet binaries may contain AVX-512 instructions from ONNX Runtime but should still run on pre-AVX-512 CPUs via runtime fallback. Test on target hardware to verify.
 
 ### Packaging Deb and RPM
 
@@ -692,510 +739,6 @@ hash -r  # Clear shell's command cache
 
 ## Smoke Tests
 
-Run these tests after installing a new build to verify core functionality.
+See [docs/SMOKE_TESTS.md](docs/SMOKE_TESTS.md) for comprehensive manual testing procedures.
 
-### Basic Verification
-
-```bash
-# Version and help
-voxtype --version
-voxtype --help
-voxtype daemon --help
-voxtype record --help
-voxtype setup --help
-
-# Show current config
-voxtype config
-
-# Check status
-voxtype status
-```
-
-### Recording Cycle
-
-```bash
-# Basic record start/stop
-voxtype record start
-sleep 3
-voxtype record stop
-
-# Toggle mode
-voxtype record toggle  # starts recording
-sleep 3
-voxtype record toggle  # stops and transcribes
-
-# Cancel recording (should not transcribe)
-voxtype record start
-sleep 2
-voxtype record cancel
-# Verify no transcription in logs:
-journalctl --user -u voxtype --since "30 seconds ago" | grep -i transcri
-```
-
-### CLI Overrides
-
-```bash
-# Output mode override (use --clipboard, --type, or --paste)
-voxtype record start --clipboard
-sleep 2
-voxtype record stop
-# Verify clipboard has text: wl-paste
-
-# Model override (requires model to be downloaded)
-# Note: --model flag is on the main command, not record subcommand
-voxtype --model base.en record start
-sleep 2
-voxtype record stop
-```
-
-### GPU Isolation Mode
-
-Tests subprocess-based GPU memory release (for laptops with hybrid graphics):
-
-```bash
-# 1. Enable gpu_isolation in config.toml:
-#    [whisper]
-#    gpu_isolation = true
-
-# 2. Restart daemon
-systemctl --user restart voxtype
-
-# 3. Record and transcribe
-voxtype record start && sleep 3 && voxtype record stop
-
-# 4. Check logs for subprocess spawning:
-journalctl --user -u voxtype --since "1 minute ago" | grep -i subprocess
-
-# 5. Verify GPU memory is released after transcription:
-#    (AMD) watch -n1 "cat /sys/class/drm/card*/device/mem_info_vram_used"
-#    (NVIDIA) nvidia-smi
-```
-
-### On-Demand Model Loading
-
-Tests loading model only when needed (reduces idle memory):
-
-```bash
-# 1. Enable on_demand_loading in config.toml:
-#    [whisper]
-#    on_demand_loading = true
-
-# 2. Restart daemon
-systemctl --user restart voxtype
-
-# 3. Check memory before recording (model not loaded):
-systemctl --user status voxtype | grep Memory
-
-# 4. Record and transcribe
-voxtype record start && sleep 3 && voxtype record stop
-
-# 5. Check logs for model load/unload:
-journalctl --user -u voxtype --since "1 minute ago" | grep -E "Loading|Unloading"
-```
-
-### Model Switching
-
-```bash
-# Download a different model if not present
-voxtype setup model  # Interactive selection
-
-# Or specify directly
-voxtype setup model small.en
-
-# Test with different models (edit config.toml or use --model flag)
-```
-
-### Remote Transcription
-
-```bash
-# 1. Configure remote backend in config.toml:
-#    [whisper]
-#    backend = "remote"
-#    remote_endpoint = "http://your-server:8080"
-
-# 2. Restart and test
-systemctl --user restart voxtype
-voxtype record start && sleep 3 && voxtype record stop
-
-# 3. Check logs for remote transcription:
-journalctl --user -u voxtype --since "1 minute ago" | grep -i remote
-```
-
-### Output Drivers
-
-The output fallback chain is: wtype → dotool → ydotool → clipboard
-
-```bash
-# Test wtype (Wayland native, default)
-# Should work by default on Wayland - check logs confirm wtype is used:
-voxtype record start && sleep 2 && voxtype record stop
-journalctl --user -u voxtype --since "30 seconds ago" | grep -E "wtype|Text output"
-
-# Test clipboard mode
-# Edit config.toml: mode = "clipboard"
-systemctl --user restart voxtype
-voxtype record start && sleep 2 && voxtype record stop
-wl-paste  # Should show transcribed text
-
-# Test paste mode (clipboard + Ctrl+V)
-# Edit config.toml: mode = "paste"
-systemctl --user restart voxtype
-voxtype record start && sleep 2 && voxtype record stop
-```
-
-### dotool Fallback
-
-Tests the dotool output driver (supports keyboard layouts for non-US keyboards):
-
-```bash
-# Requires: dotool installed, user in 'input' group
-
-# 1. Temporarily hide wtype to force dotool fallback
-sudo mv /usr/bin/wtype /usr/bin/wtype.bak
-
-# 2. Record and transcribe
-voxtype record start && sleep 2 && voxtype record stop
-
-# 3. Check logs for dotool usage:
-journalctl --user -u voxtype --since "30 seconds ago" | grep -E "dotool|Text output"
-# Expected: "wtype not available, trying next" then "Text typed via dotool"
-
-# 4. Restore wtype
-sudo mv /usr/bin/wtype.bak /usr/bin/wtype
-```
-
-### dotool Keyboard Layout
-
-Tests keyboard layout support for non-US keyboards:
-
-```bash
-# 1. Add keyboard layout to config.toml:
-#    [output]
-#    dotool_xkb_layout = "de"        # German layout
-#    dotool_xkb_variant = "nodeadkeys"  # Optional variant
-
-# 2. Hide wtype to force dotool
-sudo mv /usr/bin/wtype /usr/bin/wtype.bak
-
-# 3. Restart daemon and test
-systemctl --user restart voxtype
-voxtype record start && sleep 2 && voxtype record stop
-
-# 4. Verify layout is applied (check dotool receives DOTOOL_XKB_LAYOUT env var):
-journalctl --user -u voxtype --since "30 seconds ago" | grep -i "keyboard layout"
-
-# 5. Restore wtype
-sudo mv /usr/bin/wtype.bak /usr/bin/wtype
-```
-
-### ydotool Fallback
-
-Tests the ydotool output driver (requires ydotoold daemon):
-
-```bash
-# Requires: ydotool installed, ydotoold running
-
-# 1. Temporarily hide wtype and dotool to force ydotool fallback
-sudo mv /usr/bin/wtype /usr/bin/wtype.bak
-sudo mv /usr/bin/dotool /usr/bin/dotool.bak
-
-# 2. Record and transcribe
-voxtype record start && sleep 2 && voxtype record stop
-
-# 3. Check logs for ydotool usage:
-journalctl --user -u voxtype --since "30 seconds ago" | grep -E "ydotool|Text output"
-# Expected: "dotool not available, trying next" then "Text output via ydotool"
-
-# 4. Restore wtype and dotool
-sudo mv /usr/bin/wtype.bak /usr/bin/wtype
-sudo mv /usr/bin/dotool.bak /usr/bin/dotool
-```
-
-### Output Chain Verification
-
-Verify the complete fallback chain works:
-
-```bash
-# Check which output methods are available:
-voxtype config | grep -A10 "Output Chain"
-
-# Expected output shows installed status for each method:
-#   wtype:    ✓ installed
-#   dotool:   ✓ installed (if available)
-#   ydotool:  ✓ installed, daemon running
-#   wl-copy:  ✓ installed
-```
-
-### Delay Options
-
-```bash
-# Test type delays (edit config.toml):
-#    type_delay_ms = 50       # Inter-keystroke delay
-#    pre_type_delay_ms = 200  # Pre-typing delay
-
-systemctl --user restart voxtype
-voxtype record start && sleep 2 && voxtype record stop
-
-# Check debug logs for delay application:
-journalctl --user -u voxtype --since "30 seconds ago" | grep -E "delay|sleeping"
-```
-
-### Audio Feedback
-
-```bash
-# Enable audio feedback in config.toml:
-#    [audio.feedback]
-#    enabled = true
-#    theme = "default"
-#    volume = 0.5
-
-systemctl --user restart voxtype
-voxtype record start  # Should hear start beep
-sleep 2
-voxtype record stop   # Should hear stop beep
-```
-
-### Compositor Hooks
-
-```bash
-# Verify hooks run (check Hyprland submap changes):
-voxtype record start
-hyprctl submap  # Should show voxtype_recording
-sleep 2
-voxtype record stop
-hyprctl submap  # Should show empty (reset)
-```
-
-### Transcribe Command (File Input)
-
-```bash
-# Transcribe a WAV file directly (useful for testing without mic)
-voxtype transcribe /path/to/audio.wav
-
-# With model override
-voxtype transcribe --model large-v3-turbo /path/to/audio.wav
-```
-
-### Multilingual Model Verification
-
-Tests that non-.en models load correctly and detect language:
-
-```bash
-# Use a multilingual model (without .en suffix)
-voxtype --model small record start
-sleep 3
-voxtype record stop
-
-# Check logs for language auto-detection:
-journalctl --user -u voxtype --since "30 seconds ago" | grep "auto-detected language"
-
-# Verify model menu shows multilingual options:
-echo "0" | voxtype setup model  # Should show tiny, base, small, medium (multilingual)
-```
-
-### Invalid Model Rejection
-
-Verify bad model names warn and fall back to default:
-
-```bash
-# Should warn, send notification, and fall back to default model
-voxtype --model nonexistent record start
-sleep 2
-voxtype record cancel
-
-# Expected behavior:
-# 1. Warning logged: "Unknown model 'nonexistent', using default model 'base.en'"
-# 2. Desktop notification via notify-send
-# 3. Recording proceeds with the default model
-
-# Check logs for warning:
-journalctl --user -u voxtype --since "30 seconds ago" | grep -i "unknown model"
-
-# The setup --set command should still reject invalid models:
-voxtype setup model --set nonexistent
-# Expected: error about model not installed
-```
-
-### GPU Backend Switching
-
-Test transitions between CPU and Vulkan backends:
-
-```bash
-# Interactive GPU setup
-voxtype setup gpu
-
-# Check current backend in logs after restart:
-journalctl --user -u voxtype --since "1 minute ago" | grep -E "backend|Vulkan|CPU"
-```
-
-### Waybar JSON Output
-
-Test the status follower with JSON format for Waybar integration:
-
-```bash
-# Should output JSON status updates (Ctrl+C to stop)
-timeout 3 voxtype status --follow --format json || true
-
-# Expected output format:
-# {"text":"idle","class":"idle","tooltip":"Voxtype: idle"}
-
-# Test during recording:
-voxtype record start &
-sleep 1
-timeout 2 voxtype status --follow --format json || true
-voxtype record cancel
-```
-
-### Single Instance Enforcement
-
-Verify only one daemon can run at a time:
-
-```bash
-# With daemon already running via systemd, try starting another:
-voxtype daemon
-# Should fail with error about existing instance / PID lock
-
-# Check PID file:
-cat ~/.local/share/voxtype/voxtype.pid
-ps aux | grep voxtype
-```
-
-### Post-Processing Command
-
-Tests LLM cleanup if configured:
-
-```bash
-# 1. Configure post-processing in config.toml:
-#    [output]
-#    post_process_command = "your-llm-cleanup-script"
-
-# 2. Restart daemon
-systemctl --user restart voxtype
-
-# 3. Record and transcribe
-voxtype record start && sleep 3 && voxtype record stop
-
-# 4. Check logs for post-processing:
-journalctl --user -u voxtype --since "1 minute ago" | grep -i "post.process"
-```
-
-### Config Validation
-
-Verify malformed config files produce clear errors:
-
-```bash
-# Backup current config
-cp ~/.config/voxtype/config.toml ~/.config/voxtype/config.toml.bak
-
-# Test with invalid TOML syntax
-echo "invalid toml [[[" >> ~/.config/voxtype/config.toml
-voxtype config  # Should show parse error with line number
-
-# Test with unknown field (should warn but continue)
-echo 'unknown_field = "value"' >> ~/.config/voxtype/config.toml
-voxtype config
-
-# Restore config
-mv ~/.config/voxtype/config.toml.bak ~/.config/voxtype/config.toml
-```
-
-### Signal Handling
-
-Test direct signal control of the daemon:
-
-```bash
-# Get daemon PID
-DAEMON_PID=$(cat ~/.local/share/voxtype/voxtype.pid)
-
-# Start recording via SIGUSR1
-kill -USR1 $DAEMON_PID
-voxtype status  # Should show "recording"
-sleep 2
-
-# Stop recording via SIGUSR2
-kill -USR2 $DAEMON_PID
-voxtype status  # Should show "transcribing" then "idle"
-
-# Check logs:
-journalctl --user -u voxtype --since "30 seconds ago" | grep -E "USR1|USR2|signal"
-```
-
-### Rapid Successive Recordings
-
-Stress test with quick start/stop cycles:
-
-```bash
-# Run multiple quick recordings in succession
-for i in {1..5}; do
-    echo "Recording $i..."
-    voxtype record start
-    sleep 1
-    voxtype record cancel
-done
-
-# Verify daemon is still healthy
-voxtype status
-journalctl --user -u voxtype --since "1 minute ago" | grep -iE "error|panic"
-```
-
-### Long Recording
-
-Test recording near the max_duration_secs limit:
-
-```bash
-# Check current max duration
-voxtype config | grep max_duration
-
-# Start a long recording (default max is 60s)
-# The daemon should auto-stop at the limit
-voxtype record start
-echo "Recording... will auto-stop at max_duration_secs"
-# Wait or manually stop before limit:
-sleep 10
-voxtype record stop
-
-# To test auto-cutoff, set max_duration_secs = 5 in config and record longer
-```
-
-### Service Restart Cycle
-
-Test systemd service restarts:
-
-```bash
-# Multiple restart cycles
-for i in {1..3}; do
-    echo "Restart cycle $i..."
-    systemctl --user restart voxtype
-    sleep 2
-    voxtype status
-done
-
-# Verify clean restarts in logs:
-journalctl --user -u voxtype --since "1 minute ago" | grep -E "Starting|Ready|shutdown"
-```
-
-### Quick Smoke Test Script
-
-```bash
-#!/bin/bash
-# quick-smoke-test.sh - Run after new build install
-
-set -e
-echo "=== Voxtype Smoke Tests ==="
-
-echo -n "Version: "
-voxtype --version
-
-echo -n "Status: "
-voxtype status
-
-echo "Recording 3 seconds..."
-voxtype record start
-sleep 3
-voxtype record stop
-echo "Done."
-
-echo ""
-echo "Check logs:"
-journalctl --user -u voxtype --since "30 seconds ago" --no-pager | tail -10
-```
+For automated regression testing, use the `/regression-test` skill which covers unit tests, CLI commands, config validation, and binary variant verification.

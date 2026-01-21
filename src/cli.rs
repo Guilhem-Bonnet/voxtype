@@ -23,9 +23,10 @@ COMMANDS:
   voxtype config           Show current configuration
 
 EXAMPLES:
-  voxtype setup model      Interactive model selection
+  voxtype setup model      Interactive model selection (Whisper or Parakeet)
   voxtype setup waybar     Show Waybar integration config
-  voxtype setup gpu        Manage GPU acceleration
+  voxtype setup gpu        Manage GPU acceleration (Vulkan)
+  voxtype setup parakeet   Switch between Whisper and Parakeet engines
   voxtype status --follow --format json   Waybar integration
 
 See 'voxtype <command> --help' for more info on a command.
@@ -52,13 +53,19 @@ pub struct Cli {
     #[arg(long)]
     pub paste: bool,
 
-    /// Override whisper model (tiny, tiny.en, base, base.en, small, small.en, medium, medium.en, large-v3, large-v3-turbo)
+    /// Override model for transcription.
+    /// Whisper: tiny, base, small, medium, large-v3, large-v3-turbo (and .en variants).
+    /// Parakeet: parakeet-tdt-0.6b-v3, parakeet-tdt-0.6b-v3-int8
     #[arg(long, value_name = "MODEL")]
     pub model: Option<String>,
 
     /// Disable context window optimization for short recordings
     #[arg(long)]
     pub no_whisper_context_optimization: bool,
+
+    /// Override transcription engine: "whisper" (default) or "parakeet" (EXPERIMENTAL)
+    #[arg(long, value_name = "ENGINE")]
+    pub engine: Option<String>,
 
     /// Override hotkey (e.g., SCROLLLOCK, PAUSE, F13)
     #[arg(long, value_name = "KEY")]
@@ -121,7 +128,9 @@ pub enum Commands {
         #[arg(long)]
         download: bool,
 
-        /// Specify which model to download (use with --download)
+        /// Specify which model to download (use with --download).
+        /// Whisper: tiny, base, small, medium, large-v3, large-v3-turbo (and .en variants).
+        /// Parakeet: parakeet-tdt-0.6b-v3, parakeet-tdt-0.6b-v3-int8
         #[arg(long, value_name = "NAME")]
         model: Option<String>,
 
@@ -355,6 +364,21 @@ pub enum SetupAction {
         disable: bool,
 
         /// Show current backend status
+        #[arg(long)]
+        status: bool,
+    },
+
+    /// Switch between Whisper and Parakeet transcription engines
+    Parakeet {
+        /// Enable Parakeet engine (switch to Parakeet binary)
+        #[arg(long)]
+        enable: bool,
+
+        /// Disable Parakeet engine (switch back to Whisper binary)
+        #[arg(long)]
+        disable: bool,
+
+        /// Show current Parakeet backend status
         #[arg(long)]
         status: bool,
     },
@@ -841,5 +865,48 @@ mod tests {
             }
             _ => panic!("Expected Record command"),
         }
+    }
+
+    // =========================================================================
+    // Engine flag tests
+    // =========================================================================
+
+    #[test]
+    fn test_engine_flag_whisper() {
+        let cli = Cli::parse_from(["voxtype", "--engine", "whisper"]);
+        assert_eq!(cli.engine, Some("whisper".to_string()));
+    }
+
+    #[test]
+    fn test_engine_flag_parakeet() {
+        let cli = Cli::parse_from(["voxtype", "--engine", "parakeet"]);
+        assert_eq!(cli.engine, Some("parakeet".to_string()));
+    }
+
+    #[test]
+    fn test_engine_flag_not_set() {
+        let cli = Cli::parse_from(["voxtype"]);
+        assert!(cli.engine.is_none());
+    }
+
+    #[test]
+    fn test_engine_flag_with_daemon_command() {
+        let cli = Cli::parse_from(["voxtype", "--engine", "parakeet", "daemon"]);
+        assert_eq!(cli.engine, Some("parakeet".to_string()));
+        assert!(matches!(cli.command, Some(Commands::Daemon)));
+    }
+
+    #[test]
+    fn test_engine_flag_with_model_flag() {
+        let cli = Cli::parse_from(["voxtype", "--engine", "whisper", "--model", "large-v3"]);
+        assert_eq!(cli.engine, Some("whisper".to_string()));
+        assert_eq!(cli.model, Some("large-v3".to_string()));
+    }
+
+    #[test]
+    fn test_engine_flag_case_preserved() {
+        // The CLI should preserve case as-is; main.rs handles case-insensitive matching
+        let cli = Cli::parse_from(["voxtype", "--engine", "PARAKEET"]);
+        assert_eq!(cli.engine, Some("PARAKEET".to_string()));
     }
 }

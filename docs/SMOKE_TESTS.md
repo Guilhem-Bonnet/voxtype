@@ -495,14 +495,71 @@ voxtype setup model --set nonexistent
 
 ## GPU Backend Switching
 
-Test transitions between CPU and Vulkan backends:
+Test transitions between CPU and GPU backends (engine-aware):
 
 ```bash
-# Interactive GPU setup
+# Check current status
 voxtype setup gpu
 
-# Check current backend in logs after restart:
-journalctl --user -u voxtype --since "1 minute ago" | grep -E "backend|Vulkan|CPU"
+# Whisper mode (symlink points to voxtype-vulkan or voxtype-avx*)
+# --enable switches to Vulkan, --disable switches to best CPU
+ls -la /usr/bin/voxtype  # Verify current symlink
+sudo voxtype setup gpu --enable   # Switch to Vulkan
+ls -la /usr/bin/voxtype  # Should point to voxtype-vulkan
+sudo voxtype setup gpu --disable  # Switch to best CPU (avx512 or avx2)
+ls -la /usr/bin/voxtype  # Should point to voxtype-avx512 or voxtype-avx2
+
+# Parakeet mode (symlink points to voxtype-parakeet-*)
+# --enable switches to CUDA, --disable switches to best Parakeet CPU
+sudo ln -sf /usr/lib/voxtype/voxtype-parakeet-avx512 /usr/bin/voxtype
+sudo voxtype setup gpu --enable   # Switch to Parakeet CUDA
+ls -la /usr/bin/voxtype  # Should point to voxtype-parakeet-cuda
+sudo voxtype setup gpu --disable  # Switch to best Parakeet CPU
+ls -la /usr/bin/voxtype  # Should point to voxtype-parakeet-avx512
+
+# Restore to Whisper Vulkan for normal use
+sudo ln -sf /usr/lib/voxtype/voxtype-vulkan /usr/bin/voxtype
+```
+
+## Parakeet Backend Switching
+
+Test switching between Whisper and Parakeet engines:
+
+```bash
+# Check current status
+voxtype setup parakeet
+
+# Enable Parakeet (switches symlink to best parakeet binary)
+sudo voxtype setup parakeet --enable
+ls -la /usr/bin/voxtype  # Should point to voxtype-parakeet-cuda or voxtype-parakeet-avx*
+
+# Disable Parakeet (switches back to equivalent Whisper binary)
+sudo voxtype setup parakeet --disable
+ls -la /usr/bin/voxtype  # Should point to voxtype-vulkan or voxtype-avx*
+
+# Verify systemd service was updated
+grep ExecStart ~/.config/systemd/user/voxtype.service
+```
+
+## Engine Switching via Model Selection
+
+Test that selecting a model from a different engine updates config correctly:
+
+```bash
+# Start with Whisper engine configured
+grep engine ~/.config/voxtype/config.toml  # Should show engine = "whisper" or be absent
+
+# Select a Parakeet model (requires --features parakeet build)
+voxtype setup model  # Choose a parakeet-tdt model
+grep engine ~/.config/voxtype/config.toml  # Should show engine = "parakeet"
+grep -A2 "\[parakeet\]" ~/.config/voxtype/config.toml  # Should show model name
+
+# Select a Whisper model
+voxtype setup model  # Choose a Whisper model (e.g., base.en)
+grep engine ~/.config/voxtype/config.toml  # Should show engine = "whisper"
+
+# Verify star indicator shows current model
+voxtype setup model  # Current model should have * prefix
 ```
 
 ## Waybar JSON Output
