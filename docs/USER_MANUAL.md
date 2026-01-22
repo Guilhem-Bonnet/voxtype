@@ -13,6 +13,7 @@ Voxtype is a push-to-talk voice-to-text tool for Linux. Optimized for Wayland, w
 - [Canceling Transcription](#canceling-transcription)
 - [Transcription Engines](#transcription-engines)
 - [Multi-Model Support](#multi-model-support)
+- [Improving Transcription Accuracy](#improving-transcription-accuracy)
 - [Whisper Models](#whisper-models)
 - [Remote Whisper Servers](#remote-whisper-servers)
 - [Output Modes](#output-modes)
@@ -635,6 +636,60 @@ secondary_model = "large-v3-turbo"  # High accuracy when needed
 [audio.feedback]
 enabled = true  # Helpful audio cues when switching models
 ```
+
+---
+
+## Improving Transcription Accuracy
+
+Whisper sometimes mistranscribes uncommon words—technical terms, proper nouns, company names, or domain-specific jargon. The `initial_prompt` feature lets you provide hints that improve accuracy for these cases.
+
+### When to Use initial_prompt
+
+Use initial_prompt when you regularly dictate content containing:
+
+- **Technical jargon**: Kubernetes, PostgreSQL, TypeScript, systemd
+- **Product/company names**: Voxtype, Hyprland, Waybar, wtype
+- **People's names**: Especially non-English names that Whisper might mishear
+- **Acronyms**: API, CLI, LLM, CI/CD
+- **Domain-specific terms**: Medical, legal, or scientific vocabulary
+
+### Configuration
+
+Add to your `~/.config/voxtype/config.toml`:
+
+```toml
+[whisper]
+model = "base.en"
+initial_prompt = "Technical discussion about Rust, TypeScript, and Kubernetes."
+```
+
+The prompt doesn't need to be a complete sentence. A list of expected terms works well:
+
+```toml
+# Software development
+initial_prompt = "Voxtype, Hyprland, Waybar, Sway, wtype, ydotool, systemd."
+
+# Medical dictation
+initial_prompt = "Medical notes: hypertension, myocardial infarction, CT scan, MRI."
+
+# Meeting context
+initial_prompt = "Meeting with Zhang Wei, François Dupont, and Priya Sharma."
+```
+
+### CLI Override
+
+Override the prompt for a single session:
+
+```bash
+voxtype --initial-prompt "Discussion about Terraform and AWS Lambda" daemon
+```
+
+### Tips
+
+- Keep prompts short—a sentence or list of terms is sufficient
+- Update the prompt when your context changes (different project, client, or domain)
+- Combine with a larger model (`small.en` or `medium.en`) for best results on difficult vocabulary
+- The prompt guides Whisper's expectations but doesn't guarantee exact transcription
 
 ---
 

@@ -578,6 +578,58 @@ voxtype --no-whisper-context-optimization daemon
 
 **Note:** This setting only applies when using the local whisper backend (`backend = "local"`). It has no effect with remote transcription.
 
+### initial_prompt
+
+**Type:** String
+**Default:** None (empty)
+**Required:** No
+
+Provides context to Whisper to improve transcription accuracy for domain-specific vocabulary. The prompt hints at terminology, proper nouns, or formatting conventions that Whisper should expect in the audio.
+
+**Why use it:**
+
+Whisper sometimes mistranscribes uncommon words, especially:
+- Technical jargon (Kubernetes, TypeScript, PostgreSQL)
+- Company or product names (Voxtype, Hyprland, Waybar)
+- People's names (especially non-English names)
+- Acronyms and abbreviations (API, CLI, LLM)
+- Domain-specific terms (medical, legal, scientific)
+
+By providing an initial prompt with these terms, Whisper is more likely to recognize and transcribe them correctly.
+
+**Example:**
+```toml
+[whisper]
+model = "base.en"
+initial_prompt = "Technical discussion about Rust, TypeScript, and Kubernetes."
+```
+
+**More examples:**
+
+```toml
+# Software development context
+initial_prompt = "Voxtype, Hyprland, Waybar, Sway, wtype, ydotool, systemd, journalctl."
+
+# Medical dictation
+initial_prompt = "Medical notes. Terms: hypertension, myocardial infarction, CT scan, MRI."
+
+# Meeting with specific attendees
+initial_prompt = "Meeting with Zhang Wei, François Dupont, and Priya Sharma."
+```
+
+**CLI override:**
+```bash
+voxtype --initial-prompt "Discussion about Kubernetes and Terraform" daemon
+```
+
+**Tips:**
+- Keep prompts concise (a few words or a short sentence)
+- List specific terms you expect to appear in your dictation
+- Update the prompt when your context changes (different project, different domain)
+- The prompt doesn't need to be grammatically correct—a list of terms works well
+
+**Note:** This setting only applies when using the local whisper backend (`backend = "local"`). Remote servers may ignore the initial_prompt parameter.
+
 ### secondary_model
 
 **Type:** String
