@@ -355,35 +355,18 @@ if [[ "$TARGET_ARCH" == "x86_64" ]]; then
         echo "Remove releases/${VERSION}/ and rebuild from scratch."
         exit 1
     fi
+    echo ""
+fi
 
-    # Verify all binaries have unique hashes (catches build issues where binaries are identical)
-    echo "Verifying binary uniqueness..."
-    AVX2_HASH=$(sha256sum "${RELEASE_DIR}/voxtype-${VERSION}-linux-x86_64-avx2" | cut -d' ' -f1)
-    AVX512_HASH=$(sha256sum "${RELEASE_DIR}/voxtype-${VERSION}-linux-x86_64-avx512" | cut -d' ' -f1)
-    VULKAN_HASH=$(sha256sum "${RELEASE_DIR}/voxtype-${VERSION}-linux-x86_64-vulkan" | cut -d' ' -f1)
-
-    HASH_FAILED=false
-    if [[ "$AVX2_HASH" == "$AVX512_HASH" ]]; then
-        echo "  ERROR: avx2 and avx512 binaries have identical hashes!"
-        HASH_FAILED=true
-    fi
-    if [[ "$AVX2_HASH" == "$VULKAN_HASH" ]]; then
-        echo "  ERROR: avx2 and vulkan binaries have identical hashes!"
-        HASH_FAILED=true
-    fi
-    if [[ "$AVX512_HASH" == "$VULKAN_HASH" ]]; then
-        echo "  ERROR: avx512 and vulkan binaries have identical hashes!"
-        HASH_FAILED=true
-    fi
-
-    if [[ "$HASH_FAILED" == "true" ]]; then
+# Run comprehensive validation (includes hash uniqueness for all binaries)
+if [[ "$VALIDATE" == "true" && -x "${SCRIPT_DIR}/validate-release.sh" ]]; then
+    echo "Running release validation..."
+    if ! "${SCRIPT_DIR}/validate-release.sh" "$VERSION"; then
         echo ""
-        echo "Binary uniqueness check FAILED!"
-        echo "This usually means a build overwrote another binary."
-        echo "Remove releases/${VERSION}/ and rebuild from scratch."
+        echo "Release validation FAILED!"
+        echo "Fix the issues above before packaging."
         exit 1
     fi
-    echo "  ✓ All binaries have unique hashes"
     echo ""
 fi
 
