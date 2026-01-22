@@ -73,7 +73,7 @@ jobs:
 
       - name: Build packages with fpm
         run: |
-          VERSION="test"
+          VERSION="0.0.0"
           RELEASE_DIR="releases/test"
           STAGING="/tmp/voxtype-package"
 
