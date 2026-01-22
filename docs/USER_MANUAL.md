@@ -163,6 +163,19 @@ voxtype setup gpu --enable   # Switch to Vulkan GPU backend (requires sudo)
 voxtype setup gpu --disable  # Switch back to CPU backend (requires sudo)
 ```
 
+### `voxtype setup dms`
+
+Install a status widget for DankMaterialShell (KDE Plasma alternative shell).
+
+```bash
+voxtype setup dms              # Show setup instructions
+voxtype setup dms --install    # Install the QML widget plugin
+voxtype setup dms --uninstall  # Remove the widget
+voxtype setup dms --qml        # Output raw QML content
+```
+
+See [With DankMaterialShell](#with-dankmaterialshell-kde-plasma) for details.
+
 ### `voxtype record`
 
 Control recording from external sources (compositor keybindings, scripts).
@@ -1275,6 +1288,47 @@ exec = voxtype status --format text
 interval = 1
 format = <label>
 label = %output%
+```
+
+### With DankMaterialShell (KDE Plasma)
+
+Voxtype includes a QML plugin for [DankMaterialShell](https://github.com/nicman23/dankMaterialShell), an alternative KDE Plasma shell. The widget displays voxtype status with animated icons and supports click-to-toggle recording.
+
+**Automatic installation:**
+
+```bash
+voxtype setup dms --install
+```
+
+This creates a VoxtypeWidget plugin in `~/.config/DankMaterialShell/plugins/`.
+
+**After installation:**
+1. Open DankMaterialShell settings
+2. Navigate to the Plugins section
+3. Enable the VoxtypeWidget plugin
+4. Add the Voxtype widget to your panel
+
+**Widget features:**
+- Polls status every 500ms
+- Uses Nerd Font icons with color-coded states:
+  - Green microphone: idle (ready)
+  - Red pulsing dot: recording
+  - Yellow spinner: transcribing
+  - Gray microphone-slash: stopped/not running
+- Click to toggle recording
+- Hover for status tooltip
+
+**Requirements:**
+- DankMaterialShell installed
+- A [Nerd Font](https://www.nerdfonts.com/) for icons
+- `state_file = "auto"` in voxtype config (the default)
+
+**Other commands:**
+
+```bash
+voxtype setup dms              # Show setup instructions
+voxtype setup dms --uninstall  # Remove the widget
+voxtype setup dms --qml        # Output raw QML (for scripting)
 ```
 
 ---
