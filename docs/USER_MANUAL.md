@@ -911,12 +911,12 @@ systemctl --user enable --now ydotool
 
 wtype does not work on all Wayland compositors. KDE Plasma and GNOME do not support the virtual keyboard protocol that wtype requires.
 
-| Desktop | wtype | dotool | ydotool | Notes |
-|---------|-------|--------|---------|-------|
-| Hyprland, Sway, River | ✓ | ✓ | ✓ | wtype recommended (best CJK support) |
-| KDE Plasma (Wayland) | ✗ | ✓ | ✓ | dotool recommended (keyboard layout support) |
-| GNOME (Wayland) | ✗ | ✓ | ✓ | dotool recommended (keyboard layout support) |
-| X11 (any) | ✗ | ✓ | ✓ | dotool or ydotool (daemon required for ydotool) |
+| Desktop | wtype | dotool | ydotool | clipboard | Notes |
+|---------|-------|--------|---------|-----------|-------|
+| Hyprland, Sway, River | ✓ | ✓ | ✓ | wl-copy | wtype recommended (best CJK support) |
+| KDE Plasma (Wayland) | ✗ | ✓ | ✓ | wl-copy | dotool recommended (keyboard layout support) |
+| GNOME (Wayland) | ✗ | ✓ | ✓ | wl-copy | dotool recommended (keyboard layout support) |
+| X11 (any) | ✗ | ✓ | ✓ | xclip | dotool or ydotool; xclip for clipboard |
 
 **KDE Plasma and GNOME users:** Install dotool (recommended) or set up ydotool for type mode to work.
 
@@ -990,7 +990,7 @@ mode = "paste"
 
 ### Fallback Behavior
 
-Voxtype uses a fallback chain: wtype → dotool → ydotool → clipboard
+Voxtype uses a fallback chain: wtype → dotool → ydotool → clipboard (wl-copy) → xclip
 
 ```toml
 [output]
@@ -998,7 +998,42 @@ mode = "type"
 fallback_to_clipboard = true  # Falls back to clipboard if typing fails
 ```
 
-On Wayland, wtype is tried first (best CJK support), then dotool (supports keyboard layouts), then ydotool, then clipboard. On X11 or KDE/GNOME Wayland where wtype doesn't work, dotool or ydotool is used, falling back to clipboard if unavailable.
+On Wayland, wtype is tried first (best CJK support), then dotool (supports keyboard layouts), then ydotool, then wl-copy (Wayland clipboard). On X11, xclip is available as an additional clipboard fallback.
+
+### Custom Driver Order
+
+You can customize the fallback order or limit which drivers are used:
+
+```toml
+[output]
+mode = "type"
+# Prefer ydotool over wtype, skip dotool entirely
+driver_order = ["ydotool", "wtype", "clipboard"]
+```
+
+**Available drivers:** `wtype`, `dotool`, `ydotool`, `clipboard` (wl-copy), `xclip` (X11)
+
+**Examples:**
+
+```toml
+# X11-only setup (no Wayland)
+driver_order = ["ydotool", "xclip"]
+
+# Force ydotool only (no fallback)
+driver_order = ["ydotool"]
+
+# KDE/GNOME Wayland (wtype doesn't work)
+driver_order = ["dotool", "ydotool", "clipboard"]
+```
+
+**CLI override:**
+
+```bash
+# Override driver order for this session
+voxtype --driver=ydotool,clipboard daemon
+```
+
+When `driver_order` is set, `fallback_to_clipboard` is ignored—the driver list explicitly defines what's tried and in what order.
 
 ---
 

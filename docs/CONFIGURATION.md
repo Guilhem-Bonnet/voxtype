@@ -956,14 +956,58 @@ paste_keys = "shift+insert"  # For Hyprland/Omarchy
 
 When `true` and `mode = "type"`, falls back to clipboard if typing fails.
 
-**Note:** This setting has no effect when `mode = "paste"` since paste mode doesn't use fallback behavior.
+**Note:** This setting is ignored when `driver_order` is set, since the driver list explicitly defines what's tried.
 
 **Example:**
 ```toml
 [output]
 mode = "type"
-fallback_to_clipboard = true  # Use clipboard if ydotool fails
+fallback_to_clipboard = true  # Use clipboard if typing drivers fail
 ```
+
+### driver_order
+
+**Type:** Array of strings
+**Default:** `["wtype", "dotool", "ydotool", "clipboard", "xclip"]`
+**Required:** No
+
+Custom order of output drivers to try when `mode = "type"`. Each driver is tried in sequence until one succeeds. This allows you to prefer specific drivers or exclude others entirely.
+
+**Available drivers:**
+- `wtype` - Wayland virtual keyboard (best CJK/Unicode support, wlroots compositors only)
+- `dotool` - uinput-based typing (supports keyboard layouts, works on X11/Wayland/TTY)
+- `ydotool` - uinput-based typing (requires daemon, X11/Wayland/TTY)
+- `clipboard` - Wayland clipboard via wl-copy
+- `xclip` - X11 clipboard via xclip
+
+**Default behavior (no driver_order set):**
+The default chain is: wtype → dotool → ydotool → clipboard → xclip
+
+**Examples:**
+
+```toml
+[output]
+mode = "type"
+
+# Prefer ydotool over dotool, skip wtype
+driver_order = ["ydotool", "dotool", "clipboard"]
+
+# X11-only setup
+driver_order = ["dotool", "ydotool", "xclip"]
+
+# Force single driver (no fallback)
+driver_order = ["ydotool"]
+
+# KDE/GNOME Wayland (wtype doesn't work)
+driver_order = ["dotool", "ydotool", "clipboard"]
+```
+
+**CLI override:**
+```bash
+voxtype --driver=ydotool,clipboard daemon
+```
+
+**Note:** When `driver_order` is set, `fallback_to_clipboard` is ignored—the driver list explicitly defines what's tried.
 
 ### dotool_xkb_layout
 
