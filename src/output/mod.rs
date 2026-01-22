@@ -6,7 +6,8 @@
 //! 1. wtype - Wayland-native, best Unicode/CJK support, no daemon needed
 //! 2. dotool - Works on X11/Wayland/TTY, supports keyboard layouts, no daemon needed
 //! 3. ydotool - Works on X11/Wayland/TTY, requires daemon
-//! 4. clipboard - Universal fallback via wl-copy
+//! 4. clipboard (wl-copy) - Wayland clipboard fallback
+//! 5. xclip - X11 clipboard fallback
 //!
 //! Paste mode (clipboard + Ctrl+V) helps with system with non US keyboard layouts.
 
@@ -15,6 +16,7 @@ pub mod dotool;
 pub mod paste;
 pub mod post_process;
 pub mod wtype;
+pub mod xclip;
 pub mod ydotool;
 
 use crate::config::{OutputConfig, OutputDriver};
@@ -143,6 +145,7 @@ const DEFAULT_DRIVER_ORDER: &[OutputDriver] = &[
     OutputDriver::Dotool,
     OutputDriver::Ydotool,
     OutputDriver::Clipboard,
+    OutputDriver::Xclip,
 ];
 
 /// Create a TextOutput implementation for a specific driver
@@ -177,6 +180,7 @@ fn create_driver_output(
             config.auto_submit,
         )),
         OutputDriver::Clipboard => Box::new(clipboard::ClipboardOutput::new(show_notification)),
+        OutputDriver::Xclip => Box::new(xclip::XclipOutput::new(show_notification)),
     }
 }
 

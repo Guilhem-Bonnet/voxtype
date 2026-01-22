@@ -1094,8 +1094,10 @@ pub enum OutputDriver {
     Dotool,
     /// ydotool - Works on X11/Wayland/TTY, requires daemon
     Ydotool,
-    /// Clipboard via wl-copy (universal fallback)
+    /// Clipboard via wl-copy (Wayland)
     Clipboard,
+    /// Clipboard via xclip (X11)
+    Xclip,
 }
 
 impl std::fmt::Display for OutputDriver {
@@ -1105,6 +1107,7 @@ impl std::fmt::Display for OutputDriver {
             OutputDriver::Dotool => write!(f, "dotool"),
             OutputDriver::Ydotool => write!(f, "ydotool"),
             OutputDriver::Clipboard => write!(f, "clipboard"),
+            OutputDriver::Xclip => write!(f, "xclip"),
         }
     }
 }
@@ -1118,8 +1121,9 @@ impl std::str::FromStr for OutputDriver {
             "dotool" => Ok(OutputDriver::Dotool),
             "ydotool" => Ok(OutputDriver::Ydotool),
             "clipboard" => Ok(OutputDriver::Clipboard),
+            "xclip" => Ok(OutputDriver::Xclip),
             _ => Err(format!(
-                "Unknown driver '{}'. Valid options: wtype, dotool, ydotool, clipboard",
+                "Unknown driver '{}'. Valid options: wtype, dotool, ydotool, clipboard, xclip",
                 s
             )),
         }
@@ -1988,9 +1992,11 @@ mod tests {
         assert_eq!("dotool".parse::<OutputDriver>().unwrap(), OutputDriver::Dotool);
         assert_eq!("ydotool".parse::<OutputDriver>().unwrap(), OutputDriver::Ydotool);
         assert_eq!("clipboard".parse::<OutputDriver>().unwrap(), OutputDriver::Clipboard);
+        assert_eq!("xclip".parse::<OutputDriver>().unwrap(), OutputDriver::Xclip);
         // Case insensitive
         assert_eq!("WTYPE".parse::<OutputDriver>().unwrap(), OutputDriver::Wtype);
         assert_eq!("Ydotool".parse::<OutputDriver>().unwrap(), OutputDriver::Ydotool);
+        assert_eq!("XCLIP".parse::<OutputDriver>().unwrap(), OutputDriver::Xclip);
         // Invalid
         assert!("invalid".parse::<OutputDriver>().is_err());
     }
@@ -2001,6 +2007,7 @@ mod tests {
         assert_eq!(OutputDriver::Dotool.to_string(), "dotool");
         assert_eq!(OutputDriver::Ydotool.to_string(), "ydotool");
         assert_eq!(OutputDriver::Clipboard.to_string(), "clipboard");
+        assert_eq!(OutputDriver::Xclip.to_string(), "xclip");
     }
 
     #[test]
