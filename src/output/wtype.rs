@@ -41,11 +41,9 @@ impl WtypeOutput {
             shift_enter_newlines,
         }
     }
-}
 
-#[async_trait::async_trait]
-impl TextOutput for WtypeOutput {
-    async fn output(&self, text: &str) -> Result<(), OutputError> {
+    /// Type a string of text using wtype
+    async fn type_text(&self, text: &str) -> Result<(), OutputError> {
         if text.is_empty() {
             return Ok(());
         }
@@ -92,20 +90,84 @@ impl TextOutput for WtypeOutput {
             )));
         }
 
-        // Send Enter key if configured
-        if self.auto_submit {
-            let enter_output = Command::new("wtype")
-                .args(["-k", "Return"])
-                .stdout(Stdio::null())
-                .stderr(Stdio::piped())
-                .output()
-                .await
-                .map_err(|e| OutputError::InjectionFailed(format!("wtype Enter failed: {}", e)))?;
+        Ok(())
+    }
 
-            if !enter_output.status.success() {
-                let stderr = String::from_utf8_lossy(&enter_output.stderr);
-                tracing::warn!("Failed to send Enter key: {}", stderr);
+    /// Send Shift+Enter key combination using wtype
+    async fn send_shift_enter(&self) -> Result<(), OutputError> {
+        let output = Command::new("wtype")
+            .args(["-M", "shift", "-k", "Return", "-m", "shift"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output()
+            .await
+            .map_err(|e| {
+                OutputError::InjectionFailed(format!("wtype Shift+Enter failed: {}", e))
+            })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            tracing::warn!("Failed to send Shift+Enter: {}", stderr);
+        }
+
+        Ok(())
+    }
+
+    /// Send Enter key using wtype
+    async fn send_enter(&self) -> Result<(), OutputError> {
+        let output = Command::new("wtype")
+            .args(["-k", "Return"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output()
+            .await
+            .map_err(|e| OutputError::InjectionFailed(format!("wtype Enter failed: {}", e)))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            tracing::warn!("Failed to send Enter key: {}", stderr);
+        }
+
+        Ok(())
+    }
+
+    /// Output text with newlines converted to Shift+Enter
+    async fn output_with_shift_enter_newlines(&self, text: &str) -> Result<(), OutputError> {
+        let segments: Vec<&str> = text.split('\n').collect();
+
+        for (i, segment) in segments.iter().enumerate() {
+            // Type the text segment
+            if !segment.is_empty() {
+                self.type_text(segment).await?;
             }
+
+            // Send Shift+Enter between segments (not after the last one)
+            if i < segments.len() - 1 {
+                self.send_shift_enter().await?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl TextOutput for WtypeOutput {
+    async fn output(&self, text: &str) -> Result<(), OutputError> {
+        if text.is_empty() {
+            return Ok(());
+        }
+
+        // If shift_enter_newlines is enabled, process text with Shift+Enter for newlines
+        if self.shift_enter_newlines && text.contains('\n') {
+            self.output_with_shift_enter_newlines(text).await?;
+        } else {
+            self.type_text(text).await?;
+        }
+
+        // Send Enter key if auto_submit is configured
+        if self.auto_submit {
+            self.send_enter().await?;
         }
 
         Ok(())
@@ -140,6 +202,7 @@ mod tests {
         assert!(!output.auto_submit);
         assert_eq!(output.type_delay_ms, 0);
         assert_eq!(output.pre_type_delay_ms, 0);
+        assert!(!output.shift_enter_newlines);
     }
 
     #[test]
@@ -161,5 +224,11 @@ mod tests {
         let output = WtypeOutput::new(false, 0, 200, false);
         assert_eq!(output.type_delay_ms, 0);
         assert_eq!(output.pre_type_delay_ms, 200);
+    }
+
+    #[test]
+    fn test_new_with_shift_enter_newlines() {
+        let output = WtypeOutput::new(false, 0, 0, true);
+        assert!(output.shift_enter_newlines);
     }
 }
