@@ -309,6 +309,21 @@ pub enum SetupAction {
         uninstall: bool,
     },
 
+    /// DankMaterialShell (DMS) integration
+    Dms {
+        /// Install DMS plugin (create widget directory and QML file)
+        #[arg(long)]
+        install: bool,
+
+        /// Uninstall DMS plugin (remove widget directory)
+        #[arg(long)]
+        uninstall: bool,
+
+        /// Output only the QML content (for scripting)
+        #[arg(long)]
+        qml: bool,
+    },
+
     /// Interactive model selection and download
     Model {
         /// List installed models instead of interactive selection
@@ -775,5 +790,69 @@ mod tests {
             result.is_err(),
             "Should not allow both --file and --type"
         );
+    }
+
+    #[test]
+    fn test_setup_dms_install() {
+        let cli = Cli::parse_from(["voxtype", "setup", "dms", "--install"]);
+        match cli.command {
+            Some(Commands::Setup {
+                action: Some(SetupAction::Dms { install, uninstall, qml }),
+                ..
+            }) => {
+                assert!(install, "should have install=true");
+                assert!(!uninstall, "should have uninstall=false");
+                assert!(!qml, "should have qml=false");
+            }
+            _ => panic!("Expected Setup Dms command"),
+        }
+    }
+
+    #[test]
+    fn test_setup_dms_uninstall() {
+        let cli = Cli::parse_from(["voxtype", "setup", "dms", "--uninstall"]);
+        match cli.command {
+            Some(Commands::Setup {
+                action: Some(SetupAction::Dms { install, uninstall, qml }),
+                ..
+            }) => {
+                assert!(!install, "should have install=false");
+                assert!(uninstall, "should have uninstall=true");
+                assert!(!qml, "should have qml=false");
+            }
+            _ => panic!("Expected Setup Dms command"),
+        }
+    }
+
+    #[test]
+    fn test_setup_dms_qml() {
+        let cli = Cli::parse_from(["voxtype", "setup", "dms", "--qml"]);
+        match cli.command {
+            Some(Commands::Setup {
+                action: Some(SetupAction::Dms { install, uninstall, qml }),
+                ..
+            }) => {
+                assert!(!install, "should have install=false");
+                assert!(!uninstall, "should have uninstall=false");
+                assert!(qml, "should have qml=true");
+            }
+            _ => panic!("Expected Setup Dms command"),
+        }
+    }
+
+    #[test]
+    fn test_setup_dms_default() {
+        let cli = Cli::parse_from(["voxtype", "setup", "dms"]);
+        match cli.command {
+            Some(Commands::Setup {
+                action: Some(SetupAction::Dms { install, uninstall, qml }),
+                ..
+            }) => {
+                assert!(!install, "should have install=false");
+                assert!(!uninstall, "should have uninstall=false");
+                assert!(!qml, "should have qml=false");
+            }
+            _ => panic!("Expected Setup Dms command"),
+        }
     }
 }
