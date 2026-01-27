@@ -399,19 +399,73 @@ mode = "paste"      # Copies to clipboard, then simulates Ctrl+V
 
 ### "ydotool daemon not running"
 
-**Cause:** ydotool systemd service not started.
+**Cause:** ydotool systemd service not started, or configured incorrectly for your distribution.
 
-**Solution:**
+**Solution:** The setup varies by distribution:
+
+#### Arch Linux (user service)
+
+Arch provides a user-level service that runs in your session:
+
 ```bash
-# Enable and start ydotool
+# Enable and start ydotool as a user service
 systemctl --user enable --now ydotool
 
 # Verify it's running
 systemctl --user status ydotool
-
-# Check for errors
-journalctl --user -u ydotool
 ```
+
+#### Fedora (system service)
+
+Fedora provides a system-level service that requires additional configuration to work with your user:
+
+```bash
+# 1. Enable and start the system service
+sudo systemctl enable --now ydotool
+
+# 2. Edit the service to allow your user to access the socket
+sudo systemctl edit ydotool
+```
+
+Add this content (replace `1000` with your user/group ID from `id -u` and `id -g`):
+
+```ini
+[Service]
+ExecStart=
+ExecStart=/usr/bin/ydotoold --socket-path="/run/user/1000/.ydotool_socket" --socket-own="1000:1000"
+```
+
+Then restart:
+
+```bash
+sudo systemctl restart ydotool
+
+# Verify it's running
+systemctl status ydotool
+```
+
+#### Ubuntu/Debian
+
+Check which service type is available:
+
+```bash
+# Check for user service
+systemctl --user status ydotool
+
+# If not found, check for system service
+systemctl status ydotool
+```
+
+If only a system service exists, follow the Fedora instructions above.
+
+#### Verify ydotool works
+
+```bash
+# Test that ydotool can type
+ydotool type "test"
+```
+
+If you see "Failed to connect to socket", the daemon isn't running or the socket permissions are wrong.
 
 ### Text not typed / nothing happens
 
