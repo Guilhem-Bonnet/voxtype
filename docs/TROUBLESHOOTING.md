@@ -10,6 +10,7 @@ Solutions to common issues when using Voxtype.
 - [Transcription Issues](#transcription-issues)
 - [Output Problems](#output-problems)
   - [wtype not working on KDE Plasma or GNOME Wayland](#wtype-not-working-on-kde-plasma-or-gnome-wayland)
+  - [Text output not working on X11](#text-output-not-working-on-x11)
   - [Wrong characters on non-US keyboard layouts](#wrong-characters-on-non-us-keyboard-layouts-yz-swapped-qwertz-azerty)
 - [Performance Issues](#performance-issues)
 - [Systemd Service Issues](#systemd-service-issues)
@@ -395,6 +396,74 @@ mode = "paste"      # Copies to clipboard, then simulates Ctrl+V
 | KDE Plasma (Wayland) | ✗ | ✓ | ✓ | dotool |
 | GNOME (Wayland) | ✗ | ✓ | ✓ | dotool |
 | X11 (any desktop) | ✗ | ✓ | ✓ | dotool |
+
+---
+
+### Text output not working on X11
+
+**Symptom:** You're running X11 (not Wayland) and see errors like:
+```
+WARN  wtype failed: Wayland connection failed
+WARN  clipboard (wl-copy) failed: Text injection failed
+ERROR Output failed: All output methods failed.
+```
+
+**Cause:** wtype and wl-copy are Wayland-only tools. On X11, voxtype needs dotool, ydotool, or xclip installed.
+
+**Solution:** Install one of these X11-compatible tools:
+
+**Option 1 (Recommended): Install dotool**
+
+dotool works on X11, supports keyboard layouts, and doesn't need a daemon:
+
+```bash
+# Ubuntu/Debian (from source):
+sudo apt install libxkbcommon-dev
+git clone https://git.sr.ht/~geb/dotool
+cd dotool && ./build.sh && sudo cp dotool /usr/local/bin/
+
+# Arch (AUR):
+yay -S dotool
+
+# Add user to input group
+sudo usermod -aG input $USER
+# Log out and back in
+```
+
+**Option 2: Install ydotool**
+
+ydotool works on X11 but requires a running daemon:
+
+```bash
+# Ubuntu/Debian:
+sudo apt install ydotool
+
+# Start the daemon (see "ydotool daemon not running" section for Fedora)
+systemctl --user enable --now ydotool
+```
+
+**Option 3: Use clipboard mode with xclip**
+
+For clipboard-only output (you paste manually with Ctrl+V):
+
+```bash
+# Ubuntu/Debian:
+sudo apt install xclip
+```
+
+Then configure voxtype to use clipboard mode:
+```toml
+[output]
+mode = "clipboard"
+```
+
+**Verify your setup:**
+
+```bash
+voxtype setup
+```
+
+This shows which output tools are installed and available.
 
 ---
 
