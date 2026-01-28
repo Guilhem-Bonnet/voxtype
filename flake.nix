@@ -11,6 +11,15 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
+        # Separate pkgs instance with allowUnfree for CUDA-dependent packages.
+        # legacyPackages doesn't support config overrides, so consumer flakes
+        # can't pass allowUnfree=true through. CUDA has a non-free license
+        # (CUDA EULA) that requires this. See: https://github.com/peteonrails/voxtype/issues/135
+        pkgsUnfree = import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+        };
+
         # Common build inputs for all variants
         commonNativeBuildInputs = with pkgs; [
           cmake
@@ -184,14 +193,15 @@
         };
 
         # Build the Parakeet + CUDA variant for NVIDIA GPUs
+        # Uses pkgsUnfree because CUDA has a non-free license (CUDA EULA)
         parakeetCudaUnwrapped = mkVoxtypeUnwrapped {
           pname = "voxtype-parakeet-cuda";
           features = [ "parakeet-load-dynamic" "parakeet-cuda" ];
-          extraNativeBuildInputs = with pkgs; [ cudaPackages.cuda_nvcc ];
-          extraBuildInputs = with pkgs; [
-            onnxruntime
-            cudaPackages.cudatoolkit
-            cudaPackages.cudnn
+          extraNativeBuildInputs = [ pkgsUnfree.cudaPackages.cuda_nvcc ];
+          extraBuildInputs = [
+            pkgs.onnxruntime
+            pkgsUnfree.cudaPackages.cudatoolkit
+            pkgsUnfree.cudaPackages.cudnn
           ];
         };
 
