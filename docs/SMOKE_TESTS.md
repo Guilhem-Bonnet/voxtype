@@ -521,6 +521,100 @@ ls -la /usr/bin/voxtype  # Should point to voxtype-parakeet-avx512
 sudo ln -sf /usr/lib/voxtype/voxtype-vulkan /usr/bin/voxtype
 ```
 
+## Multi-GPU Selection (v0.5.1)
+
+Tests GPU selection on systems with multiple GPUs (e.g., integrated + discrete):
+
+```bash
+# Check detected GPUs
+voxtype setup gpu
+# Expected: lists all detected GPUs with vendor names
+
+# Test GPU selection via environment variable
+VOXTYPE_VULKAN_DEVICE=amd voxtype setup gpu | grep "GPU selection"
+# Expected: "GPU selection: AMD (via VOXTYPE_VULKAN_DEVICE)"
+
+VOXTYPE_VULKAN_DEVICE=nvidia voxtype setup gpu | grep "GPU selection"
+# Expected: "GPU selection: NVIDIA (via VOXTYPE_VULKAN_DEVICE)"
+
+VOXTYPE_VULKAN_DEVICE=intel voxtype setup gpu | grep "GPU selection"
+# Expected: "GPU selection: Intel (via VOXTYPE_VULKAN_DEVICE)"
+
+# Test with Vulkan binary
+sudo ln -sf /usr/lib/voxtype/voxtype-vulkan /usr/local/bin/voxtype
+systemctl --user restart voxtype
+
+# Record with specific GPU selected
+VOXTYPE_VULKAN_DEVICE=amd voxtype record start
+sleep 2
+voxtype record stop
+
+# Check logs for GPU selection
+journalctl --user -u voxtype --since "30 seconds ago" | grep -i "GPU selection"
+```
+
+## Whisper CLI Backend (v0.5.1)
+
+Tests the whisper-cli subprocess backend for glibc 2.42+ compatibility:
+
+```bash
+# Requires: whisper-cli installed (from whisper.cpp project)
+which whisper-cli || echo "whisper-cli not installed - skip this test"
+
+# 1. Configure CLI backend in config.toml:
+#    [whisper]
+#    backend = "cli"
+#    # Optionally specify path:
+#    # cli_path = "/usr/local/bin/whisper-cli"
+
+# 2. Restart daemon
+systemctl --user restart voxtype
+
+# 3. Record and transcribe
+voxtype record start && sleep 3 && voxtype record stop
+
+# 4. Check logs for CLI backend usage:
+journalctl --user -u voxtype --since "30 seconds ago" | grep -i "cli"
+# Expected: "Using whisper-cli subprocess backend"
+
+# 5. Restore local backend:
+#    [whisper]
+#    backend = "local"
+```
+
+## Parakeet with Preloaded Model (v0.5.1)
+
+Tests that Parakeet works correctly when `on_demand_loading = false` (the default):
+
+```bash
+# This test verifies the v0.5.1 bug fix where Parakeet would incorrectly
+# use Whisper when on_demand_loading was disabled.
+
+# 1. Verify Parakeet is configured
+grep "engine" ~/.config/voxtype/config.toml
+# Expected: engine = "parakeet"
+
+# 2. Verify on_demand_loading is false (or absent, defaulting to false)
+grep "on_demand_loading" ~/.config/voxtype/config.toml || echo "on_demand_loading not set (defaults to false)"
+
+# 3. Restart daemon and check model loading
+systemctl --user restart voxtype
+journalctl --user -u voxtype --since "10 seconds ago" | grep -E "Loading|Parakeet"
+# Expected: "Loading Parakeet Tdt model from..."
+# Expected: "Parakeet Tdt model loaded in X.XXs"
+
+# 4. Record and transcribe
+voxtype record start && sleep 2 && voxtype record stop
+
+# 5. Verify Parakeet was used (NOT Whisper)
+journalctl --user -u voxtype --since "10 seconds ago" | grep -E "Transcribing.*Parakeet"
+# Expected: "Transcribing X.XXs of audio (XXXXX samples) with Parakeet Tdt"
+
+# 6. Verify NO whisper_init_state messages (indicates bug)
+journalctl --user -u voxtype --since "1 minute ago" | grep -c "whisper_init_state"
+# Expected: 0 (no Whisper initialization when using Parakeet)
+```
+
 ## Parakeet Backend Switching
 
 Test switching between Whisper and Parakeet engines:
