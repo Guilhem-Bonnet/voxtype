@@ -88,6 +88,11 @@ impl ModelManager {
             return self.create_remote_transcriber(&model_name);
         }
 
+        // For CLI backend, create transcriber each time (no caching needed)
+        if self.config.effective_mode() == WhisperMode::Cli {
+            return self.create_cli_transcriber(&model_name);
+        }
+
         // For GPU isolation, always create fresh subprocess
         if self.config.gpu_isolation {
             return self.create_subprocess_transcriber(&model_name);
@@ -106,6 +111,18 @@ impl ModelManager {
         // Override remote_model with requested model
         config.remote_model = Some(model.to_string());
         let transcriber = transcribe::remote::RemoteTranscriber::new(&config)?;
+        Ok(Arc::new(transcriber))
+    }
+
+    /// Create a CLI transcriber with model override
+    fn create_cli_transcriber(
+        &self,
+        model: &str,
+    ) -> Result<Arc<dyn Transcriber>, TranscribeError> {
+        let mut config = self.config.clone();
+        config.model = model.to_string();
+        tracing::info!("Using whisper-cli subprocess backend");
+        let transcriber = transcribe::cli::CliTranscriber::new(&config)?;
         Ok(Arc::new(transcriber))
     }
 
@@ -214,6 +231,11 @@ impl ModelManager {
 
         if self.config.effective_mode() == WhisperMode::Remote {
             tracing::debug!("Skipping primary model preload (remote backend)");
+            return Ok(());
+        }
+
+        if self.config.effective_mode() == WhisperMode::Cli {
+            tracing::debug!("Skipping primary model preload (cli backend)");
             return Ok(());
         }
 
