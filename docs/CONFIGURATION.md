@@ -1590,6 +1590,70 @@ If Whisper transcribes "vox type" (or "Vox Type"), it will be replaced with "vox
 
 ---
 
+## [vad]
+
+Voice Activity Detection configuration. When enabled, VAD filters silence-only recordings before transcription, preventing Whisper hallucinations when processing silence.
+
+### enabled
+
+**Type:** Boolean
+**Default:** `false`
+**Required:** No
+
+Enable Voice Activity Detection. When enabled, recordings with no detected speech are rejected before transcription, saving processing time and preventing hallucinations on silent audio.
+
+**Example:**
+```toml
+[vad]
+enabled = true
+```
+
+**CLI override:**
+```bash
+voxtype --vad daemon
+```
+
+### threshold
+
+**Type:** Float (0.0 - 1.0)
+**Default:** `0.5`
+**Required:** No
+
+Speech detection sensitivity threshold. Lower values are more sensitive (detect quieter speech), higher values are more aggressive (require louder speech).
+
+- `0.0` - Very sensitive, may detect background noise as speech
+- `0.5` - Balanced, filters silence while allowing normal speech (default)
+- `1.0` - Aggressive, requires loud clear speech
+
+**Example:**
+```toml
+[vad]
+enabled = true
+threshold = 0.3  # More sensitive
+```
+
+**CLI override:**
+```bash
+voxtype --vad --vad-threshold 0.7 daemon
+```
+
+### min_speech_duration_ms
+
+**Type:** Integer
+**Default:** `100`
+**Required:** No
+
+Minimum amount of detected speech (in milliseconds) required for a recording to be transcribed. Recordings with less speech than this threshold are rejected.
+
+**Example:**
+```toml
+[vad]
+enabled = true
+min_speech_duration_ms = 200  # Require at least 200ms of speech
+```
+
+---
+
 ## [status]
 
 Controls status display icons for Waybar and other tray integrations.

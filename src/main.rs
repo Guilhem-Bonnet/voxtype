@@ -135,6 +135,12 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
+    if cli.vad {
+        config.vad.enabled = true;
+    }
+    if let Some(threshold) = cli.vad_threshold {
+        config.vad.threshold = threshold.clamp(0.0, 1.0);
+    }
 
     // Run the appropriate command
     match cli.command.unwrap_or(Commands::Daemon) {

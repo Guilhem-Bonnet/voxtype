@@ -205,6 +205,14 @@ on_transcription = true
 # Custom word replacements (case-insensitive)
 # replacements = { "vox type" = "voxtype" }
 
+# [vad]
+# Voice Activity Detection - filters silence-only recordings
+# Prevents Whisper hallucinations on silent audio
+#
+# enabled = false      # Enable VAD (off by default)
+# threshold = 0.5      # 0.0 = sensitive, 1.0 = aggressive
+# min_speech_duration_ms = 100  # Minimum speech required
+
 # [status]
 # Status display icons for Waybar/tray integrations
 #
@@ -273,6 +281,11 @@ pub struct Config {
     /// Text processing configuration (replacements, spoken punctuation)
     #[serde(default)]
     pub text: TextConfig,
+
+    /// Voice Activity Detection configuration
+    /// When enabled, filters silence-only recordings before transcription
+    #[serde(default)]
+    pub vad: VadConfig,
 
     /// Status display configuration (icons for Waybar/tray integrations)
     #[serde(default)]
@@ -873,6 +886,53 @@ pub enum TranscriptionEngine {
     Parakeet,
 }
 
+/// Voice Activity Detection configuration
+///
+/// VAD filters silence-only recordings before transcription to prevent
+/// Whisper hallucinations when processing silence.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct VadConfig {
+    /// Enable Voice Activity Detection (default: false)
+    /// When enabled, recordings with no detected speech are rejected before transcription
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Speech detection threshold (0.0-1.0, default: 0.5)
+    /// Higher values require more confident speech detection
+    #[serde(default = "default_vad_threshold")]
+    pub threshold: f32,
+
+    /// Minimum speech duration in milliseconds (default: 100)
+    /// Recordings with less speech than this are rejected
+    #[serde(default = "default_min_speech_duration_ms")]
+    pub min_speech_duration_ms: u32,
+
+    /// Path to VAD model file (optional)
+    /// If not set, uses the default model location (~/.local/share/voxtype/models/)
+    /// Auto-selects appropriate model based on transcription engine
+    #[serde(default)]
+    pub model: Option<String>,
+}
+
+fn default_vad_threshold() -> f32 {
+    0.5
+}
+
+fn default_min_speech_duration_ms() -> u32 {
+    100
+}
+
+impl Default for VadConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            threshold: default_vad_threshold(),
+            min_speech_duration_ms: default_min_speech_duration_ms(),
+            model: None,
+        }
+    }
+}
+
 /// Text processing configuration
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct TextConfig {
@@ -1217,6 +1277,7 @@ impl Default for Config {
             engine: TranscriptionEngine::default(),
             parakeet: None,
             text: TextConfig::default(),
+            vad: VadConfig::default(),
             status: StatusConfig::default(),
             state_file: Some("auto".to_string()),
             profiles: HashMap::new(),

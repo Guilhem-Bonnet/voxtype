@@ -94,6 +94,15 @@ pub struct Cli {
     #[arg(long, value_name = "DRIVERS")]
     pub driver: Option<String>,
 
+    /// Enable Voice Activity Detection (filter silence before transcription)
+    #[arg(long)]
+    pub vad: bool,
+
+    /// VAD speech detection threshold (0.0-1.0, default: 0.5)
+    /// Lower = more sensitive, Higher = less sensitive
+    #[arg(long, value_name = "THRESHOLD")]
+    pub vad_threshold: Option<f32>,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
