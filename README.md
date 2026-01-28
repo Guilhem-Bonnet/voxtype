@@ -516,17 +516,33 @@ type_delay_ms = 10
 
 ```mermaid
 flowchart LR
-    subgraph Daemon
-        Hotkey["Hotkey<br/>(evdev)"] --> Audio["Audio<br/>(cpal)"]
-        Audio --> Whisper["Whisper<br/>(whisper-rs)"]
+    subgraph Input
+        Hotkey["Hotkey<br/>(compositor/evdev)"] --> Audio["Audio<br/>(cpal)"]
+    end
+    subgraph Transcription
+        Audio --> Engine{Engine?}
+        Engine -->|whisper| WhisperBackend{Backend?}
+        Engine -->|parakeet| Parakeet["Parakeet<br/>(ONNX Runtime)"]
+        WhisperBackend -->|local| Whisper["Whisper<br/>(whisper-rs)"]
+        WhisperBackend -->|cli| CLI["whisper-cli<br/>(subprocess)"]
+        WhisperBackend -->|remote| Remote["Remote Server<br/>(HTTP API)"]
+    end
+    subgraph Output
         Whisper --> PostProcess["Post-Process<br/>(optional)"]
-        PostProcess --> PreHook["Pre-Output<br/>Hook"]
-        PreHook --> Output["Output<br/>(wtype/dotool/ydotool)"]
-        Output --> PostHook["Post-Output<br/>Hook"]
+        CLI --> PostProcess
+        Remote --> PostProcess
+        Parakeet --> PostProcess
+        PostProcess --> PreHook["Pre-Output Hook"]
+        PreHook --> TextOutput["Output<br/>(wtype/dotool/ydotool)"]
+        TextOutput --> PostHook["Post-Output Hook"]
         PreHook -.-> Compositor["Compositor<br/>(submap/mode)"]
         PostHook -.-> Compositor
     end
 ```
+
+**Multiple transcription backends.** Voxtype supports two transcription engines:
+- **Whisper** (default): OpenAI's Whisper model via whisper.cpp. Supports local in-process, CLI subprocess, and remote HTTP backends.
+- **Parakeet**: NVIDIA's Parakeet model via ONNX Runtime. Faster than Whisper on some hardware.
 
 **Why compositor keybindings?** Wayland compositors like Hyprland, Sway, and River support key-release events, enabling push-to-talk without special permissions. Voxtype's `record start/stop` commands integrate directly with your compositor's keybinding system.
 
@@ -558,6 +574,7 @@ We want to hear from you! Voxtype is a young project and your feedback helps mak
 - [konnsim](https://github.com/konnsim) - Modifier key interference bug report
 - [IgorWarzocha](https://github.com/IgorWarzocha) - Hyprland submap solution for modifier key fix
 - [Zubair](https://github.com/mzubair481) - dotool output driver with keyboard layout support
+- [ayoahha](https://github.com/ayoahha) - CLI backend for whisper-cli subprocess transcription
 
 ## License
 
