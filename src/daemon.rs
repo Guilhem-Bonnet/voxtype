@@ -399,6 +399,73 @@ impl Daemon {
         }
     }
 
+    /// Get the transcriber for the current recording session
+    ///
+    /// For on-demand loading: waits for the background model load task to complete
+    /// For preloaded models: returns the preloaded transcriber (Parakeet) or gets from model manager (Whisper)
+    ///
+    /// Returns Ok(transcriber) on success, Err(()) if an error occurred and caller should skip to next iteration
+    async fn get_transcriber_for_recording(
+        &mut self,
+        model_override: Option<&str>,
+        transcriber_preloaded: &Option<Arc<dyn Transcriber>>,
+    ) -> std::result::Result<Arc<dyn Transcriber>, ()> {
+        if self.config.on_demand_loading() {
+            // Wait for background model load task
+            if let Some(task) = self.model_load_task.take() {
+                match task.await {
+                    Ok(Ok(transcriber)) => {
+                        tracing::info!("Model loaded successfully");
+                        Ok(transcriber)
+                    }
+                    Ok(Err(e)) => {
+                        tracing::error!("Model loading failed: {}", e);
+                        self.play_feedback(SoundEvent::Error);
+                        Err(())
+                    }
+                    Err(e) => {
+                        tracing::error!("Model loading task panicked: {}", e);
+                        self.play_feedback(SoundEvent::Error);
+                        Err(())
+                    }
+                }
+            } else {
+                tracing::error!("No model loading task found");
+                self.play_feedback(SoundEvent::Error);
+                Err(())
+            }
+        } else {
+            // Use preloaded transcriber based on engine type
+            match self.config.engine {
+                crate::config::TranscriptionEngine::Parakeet => {
+                    if let Some(ref t) = transcriber_preloaded {
+                        Ok(t.clone())
+                    } else {
+                        tracing::error!("Parakeet transcriber not preloaded");
+                        self.play_feedback(SoundEvent::Error);
+                        Err(())
+                    }
+                }
+                crate::config::TranscriptionEngine::Whisper => {
+                    if let Some(ref mut mm) = self.model_manager {
+                        match mm.get_prepared_transcriber(model_override) {
+                            Ok(t) => Ok(t),
+                            Err(e) => {
+                                tracing::error!("Failed to get transcriber: {}", e);
+                                self.play_feedback(SoundEvent::Error);
+                                Err(())
+                            }
+                        }
+                    } else {
+                        tracing::error!("Model manager not initialized");
+                        self.play_feedback(SoundEvent::Error);
+                        Err(())
+                    }
+                }
+            }
+        }
+    }
+
     /// Reset state to idle and run post_output_command to reset compositor submap
     /// Call this when exiting from recording/transcribing without normal output flow
     async fn reset_to_idle(&self, state: &mut State) {
@@ -922,52 +989,12 @@ impl Daemon {
                         (HotkeyEvent::Released, ActivationMode::PushToTalk) => {
                             tracing::debug!("Received HotkeyEvent::Released (push-to-talk), state.is_recording() = {}", state.is_recording());
                             if let State::Recording { model_override, .. } = &state {
-                                // Get transcriber for this recording
-                                let transcriber = if self.config.on_demand_loading() {
-                                    if let Some(task) = self.model_load_task.take() {
-                                        match task.await {
-                                            Ok(Ok(transcriber)) => {
-                                                tracing::info!("Model loaded successfully");
-                                                Some(transcriber)
-                                            }
-                                            Ok(Err(e)) => {
-                                                tracing::error!("Model loading failed: {}", e);
-                                                self.play_feedback(SoundEvent::Error);
-                                                state = State::Idle;
-                                                self.update_state("idle");
-                                                continue;
-                                            }
-                                            Err(e) => {
-                                                tracing::error!("Model loading task panicked: {}", e);
-                                                self.play_feedback(SoundEvent::Error);
-                                                state = State::Idle;
-                                                self.update_state("idle");
-                                                continue;
-                                            }
-                                        }
-                                    } else {
-                                        tracing::error!("No model loading task found");
-                                        self.play_feedback(SoundEvent::Error);
-                                        state = State::Idle;
-                                        self.update_state("idle");
-                                        continue;
-                                    }
-                                } else {
-                                    // Get prepared transcriber from model manager
-                                    if let Some(ref mut mm) = self.model_manager {
-                                        match mm.get_prepared_transcriber(model_override.as_deref()) {
-                                            Ok(t) => Some(t),
-                                            Err(e) => {
-                                                tracing::error!("Failed to get transcriber: {}", e);
-                                                self.play_feedback(SoundEvent::Error);
-                                                state = State::Idle;
-                                                self.update_state("idle");
-                                                continue;
-                                            }
-                                        }
-                                    } else {
-                                        tracing::error!("Model manager not initialized");
-                                        self.play_feedback(SoundEvent::Error);
+                                let transcriber = match self.get_transcriber_for_recording(
+                                    model_override.as_deref(),
+                                    &transcriber_preloaded,
+                                ).await {
+                                    Ok(t) => Some(t),
+                                    Err(()) => {
                                         state = State::Idle;
                                         self.update_state("idle");
                                         continue;
@@ -1065,52 +1092,12 @@ impl Daemon {
                                     }
                                 }
                             } else if let State::Recording { model_override: current_model_override, .. } = &state {
-                                // Get transcriber for this recording
-                                let transcriber = if self.config.on_demand_loading() {
-                                    if let Some(task) = self.model_load_task.take() {
-                                        match task.await {
-                                            Ok(Ok(transcriber)) => {
-                                                tracing::info!("Model loaded successfully");
-                                                Some(transcriber)
-                                            }
-                                            Ok(Err(e)) => {
-                                                tracing::error!("Model loading failed: {}", e);
-                                                self.play_feedback(SoundEvent::Error);
-                                                state = State::Idle;
-                                                self.update_state("idle");
-                                                continue;
-                                            }
-                                            Err(e) => {
-                                                tracing::error!("Model loading task panicked: {}", e);
-                                                self.play_feedback(SoundEvent::Error);
-                                                state = State::Idle;
-                                                self.update_state("idle");
-                                                continue;
-                                            }
-                                        }
-                                    } else {
-                                        tracing::error!("No model loading task found");
-                                        self.play_feedback(SoundEvent::Error);
-                                        state = State::Idle;
-                                        self.update_state("idle");
-                                        continue;
-                                    }
-                                } else {
-                                    // Get prepared transcriber from model manager
-                                    if let Some(ref mut mm) = self.model_manager {
-                                        match mm.get_prepared_transcriber(current_model_override.as_deref()) {
-                                            Ok(t) => Some(t),
-                                            Err(e) => {
-                                                tracing::error!("Failed to get transcriber: {}", e);
-                                                self.play_feedback(SoundEvent::Error);
-                                                state = State::Idle;
-                                                self.update_state("idle");
-                                                continue;
-                                            }
-                                        }
-                                    } else {
-                                        tracing::error!("Model manager not initialized");
-                                        self.play_feedback(SoundEvent::Error);
+                                let transcriber = match self.get_transcriber_for_recording(
+                                    current_model_override.as_deref(),
+                                    &transcriber_preloaded,
+                                ).await {
+                                    Ok(t) => Some(t),
+                                    Err(()) => {
                                         state = State::Idle;
                                         self.update_state("idle");
                                         continue;
@@ -1348,52 +1335,12 @@ impl Daemon {
                 _ = sigusr2.recv() => {
                     tracing::debug!("Received SIGUSR2 (stop recording)");
                     if let State::Recording { model_override, .. } = &state {
-                        // Get transcriber for this recording
-                        let transcriber = if self.config.on_demand_loading() {
-                            if let Some(task) = self.model_load_task.take() {
-                                match task.await {
-                                    Ok(Ok(transcriber)) => {
-                                        tracing::info!("Model loaded successfully");
-                                        Some(transcriber)
-                                    }
-                                    Ok(Err(e)) => {
-                                        tracing::error!("Model loading failed: {}", e);
-                                        self.play_feedback(SoundEvent::Error);
-                                        state = State::Idle;
-                                        self.update_state("idle");
-                                        continue;
-                                    }
-                                    Err(e) => {
-                                        tracing::error!("Model loading task panicked: {}", e);
-                                        self.play_feedback(SoundEvent::Error);
-                                        state = State::Idle;
-                                        self.update_state("idle");
-                                        continue;
-                                    }
-                                }
-                            } else {
-                                tracing::error!("No model loading task found");
-                                self.play_feedback(SoundEvent::Error);
-                                state = State::Idle;
-                                self.update_state("idle");
-                                continue;
-                            }
-                        } else {
-                            // Get prepared transcriber from model manager
-                            if let Some(ref mut mm) = self.model_manager {
-                                match mm.get_prepared_transcriber(model_override.as_deref()) {
-                                    Ok(t) => Some(t),
-                                    Err(e) => {
-                                        tracing::error!("Failed to get transcriber: {}", e);
-                                        self.play_feedback(SoundEvent::Error);
-                                        state = State::Idle;
-                                        self.update_state("idle");
-                                        continue;
-                                    }
-                                }
-                            } else {
-                                tracing::error!("Model manager not initialized");
-                                self.play_feedback(SoundEvent::Error);
+                        let transcriber = match self.get_transcriber_for_recording(
+                            model_override.as_deref(),
+                            &transcriber_preloaded,
+                        ).await {
+                            Ok(t) => Some(t),
+                            Err(()) => {
                                 state = State::Idle;
                                 self.update_state("idle");
                                 continue;
