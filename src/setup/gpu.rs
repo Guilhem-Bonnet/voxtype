@@ -24,18 +24,52 @@ use std::process::Command;
 
 const VOXTYPE_LIB_DIR: &str = "/usr/lib/voxtype";
 const VOXTYPE_BIN: &str = "/usr/bin/voxtype";
+const VOXTYPE_BIN_LOCAL: &str = "/usr/local/bin/voxtype";
 const VOXTYPE_CPU_BACKUP: &str = "/usr/lib/voxtype/voxtype-cpu";
 
+/// Get the active voxtype binary path (prefers /usr/bin, falls back to /usr/local/bin)
+fn get_active_binary_path() -> &'static str {
+    // If /usr/bin/voxtype exists and points somewhere, use it
+    if Path::new(VOXTYPE_BIN).exists() {
+        return VOXTYPE_BIN;
+    }
+    // Fall back to /usr/local/bin/voxtype
+    if Path::new(VOXTYPE_BIN_LOCAL).exists() {
+        return VOXTYPE_BIN_LOCAL;
+    }
+    // Default to standard location
+    VOXTYPE_BIN
+}
+
 /// Check if the current symlink points to a Parakeet binary
+/// Follows symlink chains to find the final target
 fn is_parakeet_binary_active() -> bool {
-    if let Ok(link_target) = fs::read_link(VOXTYPE_BIN) {
-        if let Some(target_name) = link_target.file_name() {
+    let active_bin = get_active_binary_path();
+    // Use canonicalize to resolve all symlinks and get the final target
+    if let Ok(resolved) = fs::canonicalize(active_bin) {
+        if let Some(target_name) = resolved.file_name() {
             if let Some(name) = target_name.to_str() {
                 return name.contains("parakeet");
             }
         }
     }
     false
+}
+
+/// Get the name of the active Parakeet backend binary
+fn detect_active_parakeet_backend() -> Option<String> {
+    let active_bin = get_active_binary_path();
+    // Use canonicalize to resolve all symlinks and get the final target
+    if let Ok(resolved) = fs::canonicalize(active_bin) {
+        if let Some(target_name) = resolved.file_name() {
+            if let Some(name) = target_name.to_str() {
+                if name.contains("parakeet") {
+                    return Some(name.to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Available backend variants
@@ -126,8 +160,9 @@ fn is_tiered_mode() -> bool {
 
 /// Detect which backend is currently active
 pub fn detect_current_backend() -> Option<Backend> {
-    // Check if /usr/bin/voxtype is a symlink
-    if let Ok(link_target) = fs::read_link(VOXTYPE_BIN) {
+    let active_bin = get_active_binary_path();
+    // Check if the voxtype binary is a symlink
+    if let Ok(link_target) = fs::read_link(active_bin) {
         let target_name = link_target.file_name()?.to_str()?;
         return match target_name {
             "voxtype-cpu" => Some(Backend::Cpu),
@@ -139,7 +174,7 @@ pub fn detect_current_backend() -> Option<Backend> {
     }
 
     // Not a symlink - check if it's a regular file (simple mode with CPU active)
-    if Path::new(VOXTYPE_BIN).is_file() {
+    if Path::new(active_bin).is_file() {
         return Some(Backend::Cpu);
     }
 
@@ -149,6 +184,7 @@ pub fn detect_current_backend() -> Option<Backend> {
 /// Detect available backends (installed binaries)
 pub fn detect_available_backends() -> Vec<Backend> {
     let mut available = Vec::new();
+    let active_bin = get_active_binary_path();
 
     if is_tiered_mode() {
         // Tiered mode: check for avx2, avx512, vulkan
@@ -159,9 +195,9 @@ pub fn detect_available_backends() -> Vec<Backend> {
             }
         }
     } else {
-        // Simple mode: CPU binary at /usr/bin/voxtype or backed up
-        if Path::new(VOXTYPE_BIN).is_file()
-            && !fs::symlink_metadata(VOXTYPE_BIN)
+        // Simple mode: CPU binary at the active location or backed up
+        if Path::new(active_bin).is_file()
+            && !fs::symlink_metadata(active_bin)
                 .map(|m| m.file_type().is_symlink())
                 .unwrap_or(false)
         {
@@ -290,6 +326,7 @@ pub fn check_vulkan_runtime() -> bool {
 /// Switch to a different backend (tiered mode only)
 fn switch_backend_tiered(backend: Backend) -> anyhow::Result<()> {
     let binary_path = Path::new(VOXTYPE_LIB_DIR).join(backend.binary_name());
+    let active_bin = get_active_binary_path();
 
     if !binary_path.exists() {
         anyhow::bail!(
@@ -301,8 +338,8 @@ fn switch_backend_tiered(backend: Backend) -> anyhow::Result<()> {
     }
 
     // Remove existing symlink
-    if Path::new(VOXTYPE_BIN).exists() || fs::symlink_metadata(VOXTYPE_BIN).is_ok() {
-        fs::remove_file(VOXTYPE_BIN).map_err(|e| {
+    if Path::new(active_bin).exists() || fs::symlink_metadata(active_bin).is_ok() {
+        fs::remove_file(active_bin).map_err(|e| {
             anyhow::anyhow!(
                 "Failed to remove existing symlink (need sudo?): {}\n\
                  Try: sudo voxtype setup gpu --enable",
@@ -312,7 +349,7 @@ fn switch_backend_tiered(backend: Backend) -> anyhow::Result<()> {
     }
 
     // Create new symlink
-    symlink(&binary_path, VOXTYPE_BIN).map_err(|e| {
+    symlink(&binary_path, active_bin).map_err(|e| {
         anyhow::anyhow!(
             "Failed to create symlink (need sudo?): {}\n\
              Try: sudo voxtype setup gpu --enable",
@@ -321,7 +358,7 @@ fn switch_backend_tiered(backend: Backend) -> anyhow::Result<()> {
     })?;
 
     // Restore SELinux context if available
-    let _ = Command::new("restorecon").arg(VOXTYPE_BIN).status();
+    let _ = Command::new("restorecon").arg(active_bin).status();
 
     Ok(())
 }
@@ -329,6 +366,7 @@ fn switch_backend_tiered(backend: Backend) -> anyhow::Result<()> {
 /// Enable GPU in simple mode (backup CPU binary, symlink to vulkan)
 fn enable_simple_mode() -> anyhow::Result<()> {
     let vulkan_path = Path::new(VOXTYPE_LIB_DIR).join("voxtype-vulkan");
+    let active_bin = get_active_binary_path();
 
     if !vulkan_path.exists() {
         anyhow::bail!(
@@ -339,7 +377,7 @@ fn enable_simple_mode() -> anyhow::Result<()> {
     }
 
     // Check if already using vulkan
-    if fs::read_link(VOXTYPE_BIN).is_ok() {
+    if fs::read_link(active_bin).is_ok() {
         anyhow::bail!("GPU backend is already enabled.");
     }
 
@@ -348,8 +386,8 @@ fn enable_simple_mode() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to create {}: {}", VOXTYPE_LIB_DIR, e))?;
 
     // Backup the CPU binary
-    if Path::new(VOXTYPE_BIN).exists() {
-        fs::rename(VOXTYPE_BIN, VOXTYPE_CPU_BACKUP).map_err(|e| {
+    if Path::new(active_bin).exists() {
+        fs::rename(active_bin, VOXTYPE_CPU_BACKUP).map_err(|e| {
             anyhow::anyhow!(
                 "Failed to backup CPU binary (need sudo?): {}\n\
                  Try: sudo voxtype setup gpu --enable",
@@ -359,9 +397,9 @@ fn enable_simple_mode() -> anyhow::Result<()> {
     }
 
     // Create symlink to vulkan
-    symlink(&vulkan_path, VOXTYPE_BIN).map_err(|e| {
+    symlink(&vulkan_path, active_bin).map_err(|e| {
         // Try to restore backup on failure
-        let _ = fs::rename(VOXTYPE_CPU_BACKUP, VOXTYPE_BIN);
+        let _ = fs::rename(VOXTYPE_CPU_BACKUP, active_bin);
         anyhow::anyhow!(
             "Failed to create symlink (need sudo?): {}\n\
              Try: sudo voxtype setup gpu --enable",
@@ -370,13 +408,15 @@ fn enable_simple_mode() -> anyhow::Result<()> {
     })?;
 
     // Restore SELinux context if available
-    let _ = Command::new("restorecon").arg(VOXTYPE_BIN).status();
+    let _ = Command::new("restorecon").arg(active_bin).status();
 
     Ok(())
 }
 
 /// Disable GPU in simple mode (restore CPU binary)
 fn disable_simple_mode() -> anyhow::Result<()> {
+    let active_bin = get_active_binary_path();
+
     // Check if CPU backup exists
     if !Path::new(VOXTYPE_CPU_BACKUP).exists() {
         anyhow::bail!(
@@ -387,8 +427,8 @@ fn disable_simple_mode() -> anyhow::Result<()> {
     }
 
     // Remove vulkan symlink
-    if fs::symlink_metadata(VOXTYPE_BIN).is_ok() {
-        fs::remove_file(VOXTYPE_BIN).map_err(|e| {
+    if fs::symlink_metadata(active_bin).is_ok() {
+        fs::remove_file(active_bin).map_err(|e| {
             anyhow::anyhow!(
                 "Failed to remove symlink (need sudo?): {}\n\
                  Try: sudo voxtype setup gpu --disable",
@@ -398,7 +438,7 @@ fn disable_simple_mode() -> anyhow::Result<()> {
     }
 
     // Restore CPU binary
-    fs::rename(VOXTYPE_CPU_BACKUP, VOXTYPE_BIN).map_err(|e| {
+    fs::rename(VOXTYPE_CPU_BACKUP, active_bin).map_err(|e| {
         anyhow::anyhow!(
             "Failed to restore CPU binary (need sudo?): {}\n\
              Try: sudo voxtype setup gpu --disable",
@@ -407,7 +447,7 @@ fn disable_simple_mode() -> anyhow::Result<()> {
     })?;
 
     // Restore SELinux context if available
-    let _ = Command::new("restorecon").arg(VOXTYPE_BIN).status();
+    let _ = Command::new("restorecon").arg(active_bin).status();
 
     Ok(())
 }
@@ -417,24 +457,46 @@ pub fn show_status() {
     println!("=== Voxtype Backend Status ===\n");
 
     let tiered = is_tiered_mode();
+    let active_bin = get_active_binary_path();
+    let is_parakeet = is_parakeet_binary_active();
 
     // Current backend
-    match detect_current_backend() {
-        Some(backend) => {
-            println!("Active backend: {}", backend.display_name());
-            if backend == Backend::Vulkan || (tiered && backend != Backend::Cpu) {
-                println!(
-                    "  Binary: {}",
-                    Path::new(VOXTYPE_LIB_DIR)
-                        .join(backend.binary_name())
-                        .display()
-                );
-            } else {
-                println!("  Binary: {}", VOXTYPE_BIN);
-            }
+    if is_parakeet {
+        // Detect active Parakeet backend from symlink
+        if let Some(target) = detect_active_parakeet_backend() {
+            let display_name = match target.as_str() {
+                "voxtype-parakeet-avx2" => "Parakeet CPU (AVX2)",
+                "voxtype-parakeet-avx512" => "Parakeet CPU (AVX-512)",
+                "voxtype-parakeet-cuda" => "Parakeet GPU (CUDA)",
+                "voxtype-parakeet-rocm" => "Parakeet GPU (ROCm)",
+                _ => "Parakeet (unknown variant)",
+            };
+            println!("Active backend: {}", display_name);
+            println!(
+                "  Binary: {}",
+                Path::new(VOXTYPE_LIB_DIR).join(&target).display()
+            );
+        } else {
+            println!("Active backend: Parakeet (unknown variant)");
         }
-        None => {
-            println!("Active backend: Unknown (symlink may be broken)");
+    } else {
+        match detect_current_backend() {
+            Some(backend) => {
+                println!("Active backend: {}", backend.display_name());
+                if backend == Backend::Vulkan || (tiered && backend != Backend::Cpu) {
+                    println!(
+                        "  Binary: {}",
+                        Path::new(VOXTYPE_LIB_DIR)
+                            .join(backend.binary_name())
+                            .display()
+                    );
+                } else {
+                    println!("  Binary: {}", active_bin);
+                }
+            }
+            None => {
+                println!("Active backend: Unknown (symlink may be broken)");
+            }
         }
     }
 
@@ -453,7 +515,36 @@ pub fn show_status() {
     let available = detect_available_backends();
     let current = detect_current_backend();
 
-    if tiered {
+    if is_parakeet {
+        // Show Parakeet backends
+        let parakeet_backends = [
+            ("voxtype-parakeet-avx2", "Parakeet CPU (AVX2)"),
+            ("voxtype-parakeet-avx512", "Parakeet CPU (AVX-512)"),
+            ("voxtype-parakeet-cuda", "Parakeet GPU (CUDA)"),
+            ("voxtype-parakeet-rocm", "Parakeet GPU (ROCm)"),
+        ];
+
+        // Get current symlink target
+        let current_target = fs::read_link(active_bin)
+            .ok()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()));
+
+        for (binary, display) in parakeet_backends {
+            let path = Path::new(VOXTYPE_LIB_DIR).join(binary);
+            let installed = path.exists();
+            let active = current_target.as_deref() == Some(binary);
+
+            let status = if active {
+                "active"
+            } else if installed {
+                "installed"
+            } else {
+                "not installed"
+            };
+
+            println!("  {} - {}", display, status);
+        }
+    } else if tiered {
         for backend in [Backend::Avx2, Backend::Avx512, Backend::Vulkan] {
             let installed = available.contains(&backend);
             let active = current == Some(backend);
@@ -527,41 +618,100 @@ pub fn show_status() {
 
     // Usage hints
     println!();
-    if current != Some(Backend::Vulkan) && available.contains(&Backend::Vulkan) {
-        println!("To enable GPU acceleration:");
-        println!("  sudo voxtype setup gpu --enable");
-    } else if current == Some(Backend::Vulkan) {
-        println!("To switch back to CPU:");
-        println!("  sudo voxtype setup gpu --disable");
+    if is_parakeet {
+        // Parakeet-specific hints
+        let current_target = fs::read_link(active_bin)
+            .ok()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()));
+        let is_gpu_active = current_target
+            .as_ref()
+            .map(|t| t.contains("cuda") || t.contains("rocm"))
+            .unwrap_or(false);
+
+        if !is_gpu_active && detect_best_parakeet_gpu_backend().is_some() {
+            println!("To enable GPU acceleration:");
+            println!("  sudo voxtype setup gpu --enable");
+        } else if is_gpu_active {
+            println!("To switch back to CPU:");
+            println!("  sudo voxtype setup gpu --disable");
+        }
+    } else {
+        if current != Some(Backend::Vulkan) && available.contains(&Backend::Vulkan) {
+            println!("To enable GPU acceleration:");
+            println!("  sudo voxtype setup gpu --enable");
+        } else if current == Some(Backend::Vulkan) {
+            println!("To switch back to CPU:");
+            println!("  sudo voxtype setup gpu --disable");
+        }
     }
 }
 
-/// Enable GPU backend (engine-aware: Vulkan for Whisper, CUDA for Parakeet)
+/// Detect the best Parakeet GPU backend based on available hardware and installed binaries
+fn detect_best_parakeet_gpu_backend() -> Option<(&'static str, &'static str)> {
+    let gpus = detect_gpus();
+
+    // Check for AMD GPU and ROCm binary
+    let has_amd = gpus.iter().any(|g| g.vendor == GpuVendor::Amd);
+    let rocm_path = Path::new(VOXTYPE_LIB_DIR).join("voxtype-parakeet-rocm");
+    if has_amd && rocm_path.exists() {
+        return Some(("voxtype-parakeet-rocm", "ROCm"));
+    }
+
+    // Check for NVIDIA GPU and CUDA binary
+    let has_nvidia = gpus.iter().any(|g| g.vendor == GpuVendor::Nvidia);
+    let cuda_path = Path::new(VOXTYPE_LIB_DIR).join("voxtype-parakeet-cuda");
+    if has_nvidia && cuda_path.exists() {
+        return Some(("voxtype-parakeet-cuda", "CUDA"));
+    }
+
+    // Fall back to whichever is installed (user may have external GPU)
+    if rocm_path.exists() {
+        return Some(("voxtype-parakeet-rocm", "ROCm"));
+    }
+    if cuda_path.exists() {
+        return Some(("voxtype-parakeet-cuda", "CUDA"));
+    }
+
+    None
+}
+
+/// Enable GPU backend (engine-aware: Vulkan for Whisper, CUDA/ROCm for Parakeet)
 pub fn enable() -> anyhow::Result<()> {
     // Check which engine is active by looking at the current symlink
     let is_parakeet = is_parakeet_binary_active();
 
     if is_parakeet {
-        // Parakeet mode: switch to CUDA backend
-        let cuda_path = Path::new(VOXTYPE_LIB_DIR).join("voxtype-parakeet-cuda");
-        if !cuda_path.exists() {
-            anyhow::bail!(
-                "Parakeet CUDA backend not installed.\n\
-                 The voxtype-parakeet-cuda binary was not found in {}\n\n\
-                 GPU acceleration for Parakeet requires NVIDIA CUDA.\n\
-                 Install a Parakeet CUDA-enabled package or use CPU inference.",
-                VOXTYPE_LIB_DIR
-            );
-        }
+        // Parakeet mode: switch to best available GPU backend (CUDA or ROCm)
+        let (backend_binary, backend_name) = detect_best_parakeet_gpu_backend().ok_or_else(|| {
+            let gpus = detect_gpus();
+            let has_amd = gpus.iter().any(|g| g.vendor == GpuVendor::Amd);
+            let has_nvidia = gpus.iter().any(|g| g.vendor == GpuVendor::Nvidia);
 
-        switch_backend_tiered_parakeet("voxtype-parakeet-cuda")?;
+            let hint = if has_amd {
+                "You have an AMD GPU. Install voxtype-parakeet-rocm for GPU acceleration."
+            } else if has_nvidia {
+                "You have an NVIDIA GPU. Install voxtype-parakeet-cuda for GPU acceleration."
+            } else {
+                "No supported GPU detected. Parakeet GPU acceleration requires NVIDIA (CUDA) or AMD (ROCm)."
+            };
+
+            anyhow::anyhow!(
+                "No Parakeet GPU backend installed.\n\
+                 Neither voxtype-parakeet-cuda nor voxtype-parakeet-rocm found in {}\n\n\
+                 {}",
+                VOXTYPE_LIB_DIR,
+                hint
+            )
+        })?;
+
+        switch_backend_tiered_parakeet(backend_binary)?;
 
         // Regenerate systemd service if it exists
         if super::systemd::regenerate_service_file()? {
-            println!("Updated systemd service to use Parakeet CUDA backend.");
+            println!("Updated systemd service to use Parakeet {} backend.", backend_name);
         }
 
-        println!("Switched to Parakeet (CUDA) backend.");
+        println!("Switched to Parakeet ({}) backend.", backend_name);
         println!();
         println!("Restart voxtype to use GPU acceleration:");
         println!("  systemctl --user restart voxtype");
@@ -696,6 +846,7 @@ fn detect_best_parakeet_cpu_backend() -> Option<&'static str> {
 /// Switch to a Parakeet backend binary (tiered mode)
 fn switch_backend_tiered_parakeet(binary_name: &str) -> anyhow::Result<()> {
     let binary_path = Path::new(VOXTYPE_LIB_DIR).join(binary_name);
+    let active_bin = get_active_binary_path();
 
     if !binary_path.exists() {
         anyhow::bail!(
@@ -706,8 +857,8 @@ fn switch_backend_tiered_parakeet(binary_name: &str) -> anyhow::Result<()> {
     }
 
     // Remove existing symlink
-    if Path::new(VOXTYPE_BIN).exists() || fs::symlink_metadata(VOXTYPE_BIN).is_ok() {
-        fs::remove_file(VOXTYPE_BIN).map_err(|e| {
+    if Path::new(active_bin).exists() || fs::symlink_metadata(active_bin).is_ok() {
+        fs::remove_file(active_bin).map_err(|e| {
             anyhow::anyhow!(
                 "Failed to remove existing symlink (need sudo?): {}\n\
                  Try: sudo voxtype setup gpu --enable",
@@ -717,7 +868,7 @@ fn switch_backend_tiered_parakeet(binary_name: &str) -> anyhow::Result<()> {
     }
 
     // Create new symlink
-    symlink(&binary_path, VOXTYPE_BIN).map_err(|e| {
+    symlink(&binary_path, active_bin).map_err(|e| {
         anyhow::anyhow!(
             "Failed to create symlink (need sudo?): {}\n\
              Try: sudo voxtype setup gpu --enable",
@@ -726,7 +877,7 @@ fn switch_backend_tiered_parakeet(binary_name: &str) -> anyhow::Result<()> {
     })?;
 
     // Restore SELinux context if available
-    let _ = Command::new("restorecon").arg(VOXTYPE_BIN).status();
+    let _ = Command::new("restorecon").arg(active_bin).status();
 
     Ok(())
 }
