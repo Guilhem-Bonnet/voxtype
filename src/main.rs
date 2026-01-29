@@ -388,12 +388,10 @@ async fn check_for_updates() -> anyhow::Result<()> {
 
 /// Send a record command to the running daemon via Unix signals or file triggers
 fn send_record_command(config: &config::Config, action: RecordAction) -> anyhow::Result<()> {
-    use nix::sys::signal::{kill, Signal};
-    use nix::unistd::Pid;
     use voxtype::OutputModeOverride;
 
-    // Read PID from the pid file
-    let pid_file = config::Config::runtime_dir().join("pid");
+    // Read PID from the lock file (daemon writes PID to voxtype.lock)
+    let pid_file = config::Config::runtime_dir().join("voxtype.lock");
 
     if !pid_file.exists() {
         eprintln!("Error: Voxtype daemon is not running.");
@@ -409,8 +407,8 @@ fn send_record_command(config: &config::Config, action: RecordAction) -> anyhow:
         .parse()
         .map_err(|e| anyhow::anyhow!("Invalid PID in file: {}", e))?;
 
-    // Check if the process is actually running
-    if kill(Pid::from_raw(pid), None).is_err() {
+    // Check if the process is actually running (signal 0 = check existence)
+    if unsafe { libc::kill(pid, 0) } != 0 {
         // Process doesn't exist, clean up stale PID file
         let _ = std::fs::remove_file(&pid_file);
         eprintln!("Error: Voxtype daemon is not running (stale PID file removed).");
@@ -479,9 +477,9 @@ fn send_record_command(config: &config::Config, action: RecordAction) -> anyhow:
     }
 
     // For toggle, we need to read current state to decide which signal to send
-    let signal = match &action {
-        RecordAction::Start { .. } => Signal::SIGUSR1,
-        RecordAction::Stop { .. } => Signal::SIGUSR2,
+    let signal: libc::c_int = match &action {
+        RecordAction::Start { .. } => libc::SIGUSR1,
+        RecordAction::Stop { .. } => libc::SIGUSR2,
         RecordAction::Toggle { .. } => {
             // Read current state to determine action
             let state_file = match config.resolve_state_file() {
@@ -503,16 +501,21 @@ fn send_record_command(config: &config::Config, action: RecordAction) -> anyhow:
                 std::fs::read_to_string(&state_file).unwrap_or_else(|_| "idle".to_string());
 
             if current_state.trim() == "recording" {
-                Signal::SIGUSR2 // Stop
+                libc::SIGUSR2 // Stop
             } else {
-                Signal::SIGUSR1 // Start
+                libc::SIGUSR1 // Start
             }
         }
         RecordAction::Cancel => unreachable!(), // Handled above
     };
 
-    kill(Pid::from_raw(pid), signal)
-        .map_err(|e| anyhow::anyhow!("Failed to send signal to daemon: {}", e))?;
+    let result = unsafe { libc::kill(pid, signal) };
+    if result != 0 {
+        return Err(anyhow::anyhow!(
+            "Failed to send signal to daemon: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
 
     Ok(())
 }

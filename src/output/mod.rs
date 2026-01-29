@@ -227,21 +227,24 @@ pub fn create_output_chain_with_override(
             {
                 // macOS: Primary - CGEvent (native API, best performance)
                 // driver_order not yet supported on macOS
+                let show_notification = config.notification.on_transcription;
                 chain.push(Box::new(cgevent::CGEventOutput::new(
                     config.type_delay_ms,
                     pre_type_delay_ms,
+                    show_notification,
                     config.auto_submit,
                 )));
 
                 // Fallback 1: osascript (AppleScript, works without CGEvent permissions)
                 chain.push(Box::new(osascript::OsascriptOutput::new(
+                    false, // notification already handled by primary
                     config.auto_submit,
                     pre_type_delay_ms,
                 )));
 
                 // Fallback 2: pbcopy for clipboard
                 if config.fallback_to_clipboard {
-                    chain.push(Box::new(pbcopy::PbcopyOutput::new()));
+                    chain.push(Box::new(pbcopy::PbcopyOutput::new(false)));
                 }
             }
 
@@ -292,7 +295,9 @@ pub fn create_output_chain_with_override(
         crate::config::OutputMode::Clipboard => {
             // Clipboard mode
             #[cfg(target_os = "macos")]
-            chain.push(Box::new(pbcopy::PbcopyOutput::new()));
+            chain.push(Box::new(pbcopy::PbcopyOutput::new(
+                config.notification.on_transcription,
+            )));
 
             #[cfg(not(target_os = "macos"))]
             chain.push(Box::new(clipboard::ClipboardOutput::new(

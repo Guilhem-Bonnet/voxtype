@@ -72,7 +72,7 @@ rodio = { version = "0.19", default-features = false, features = ["wav"] }
 whisper-rs = "0.15.1"
 
 # Parakeet speech-to-text (optional, ONNX-based)
-parakeet-rs = { version = "0.2.9", optional = true }
+parakeet-rs = { version = "0.3", optional = true }
 
 
 # CPU count for thread detection
@@ -88,6 +88,8 @@ pidlock = "0.1"
 tao = "0.32"
 core-graphics = "0.24"
 core-foundation = "0.10"
+dirs = "5"
+mac-notification-sys = "0.6"  # Native macOS notifications
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Input handling (evdev for kernel-level key events)
@@ -106,6 +108,7 @@ parakeet = ["dep:parakeet-rs"]
 parakeet-cuda = ["parakeet", "parakeet-rs/cuda"]
 parakeet-tensorrt = ["parakeet", "parakeet-rs/tensorrt"]
 parakeet-rocm = ["parakeet", "parakeet-rs/rocm"]
+parakeet-coreml = ["parakeet", "parakeet-rs/coreml"]
 # Dynamic loading for system ONNX Runtime (used by Nix builds)
 parakeet-load-dynamic = ["parakeet", "parakeet-rs/load-dynamic"]
 

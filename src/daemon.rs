@@ -20,9 +20,9 @@ use crate::text::TextProcessor;
 use crate::transcribe::Transcriber;
 use pidlock::Pidlock;
 use std::path::PathBuf;
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 use nix::sys::signal::{kill, Signal};
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 use nix::unistd::Pid;
 use std::sync::Arc;
 use std::time::Duration;
@@ -87,12 +87,19 @@ fn write_pid_file() -> Option<PathBuf> {
     Some(pid_path)
 }
 
-/// Check if a PID is still running
-#[cfg(unix)]
+/// Check if a PID is still running (Linux version using nix)
+#[cfg(target_os = "linux")]
 fn is_pid_running(pid: i32) -> bool {
     // kill with signal 0 checks if process exists without sending a signal
     kill(Pid::from_raw(pid), Signal::SIGCONT).is_ok()
         || kill(Pid::from_raw(pid), None).is_ok()
+}
+
+/// Check if a PID is still running (macOS version using libc)
+#[cfg(target_os = "macos")]
+fn is_pid_running(pid: i32) -> bool {
+    // kill with signal 0 checks if process exists without sending a signal
+    unsafe { libc::kill(pid, 0) == 0 }
 }
 
 /// Check if lockfile is stale (PID no longer running) and remove it if so

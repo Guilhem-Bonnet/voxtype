@@ -16,9 +16,10 @@ use std::sync::Mutex;
 use tokio::sync::mpsc;
 
 /// Hotkey events that can be sent from the listener
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HotkeyEvent {
-    Pressed,
+    /// The hotkey was pressed (model_override not supported on macOS, always None)
+    Pressed { model_override: Option<String> },
     Released,
     Cancel,
 }
@@ -92,7 +93,7 @@ impl HotkeyListener for RdevHotkeyListener {
                             let mut last = last_press_clone.lock().unwrap();
                             if last.elapsed() > Duration::from_millis(debounce_ms) {
                                 *last = Instant::now();
-                                let _ = tx_clone.blocking_send(HotkeyEvent::Pressed);
+                                let _ = tx_clone.blocking_send(HotkeyEvent::Pressed { model_override: None });
                             }
                         } else if Some(key) == cancel_key {
                             let _ = tx_clone.blocking_send(HotkeyEvent::Cancel);
