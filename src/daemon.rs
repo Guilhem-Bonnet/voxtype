@@ -374,14 +374,22 @@ impl Daemon {
         });
 
         // Initialize Voice Activity Detection if enabled
-        let vad = crate::vad::create_vad(&config);
-        if vad.is_some() {
-            tracing::info!(
-                "Voice Activity Detection enabled (threshold: {:.2}, min_speech: {}ms)",
-                config.vad.threshold,
-                config.vad.min_speech_duration_ms
-            );
-        }
+        let vad = match crate::vad::create_vad(&config) {
+            Ok(Some(vad)) => {
+                tracing::info!(
+                    "Voice Activity Detection enabled (backend: {:?}, threshold: {:.2}, min_speech: {}ms)",
+                    config.vad.backend,
+                    config.vad.threshold,
+                    config.vad.min_speech_duration_ms
+                );
+                Some(vad)
+            }
+            Ok(None) => None,
+            Err(e) => {
+                tracing::warn!("Failed to initialize VAD, continuing without: {}", e);
+                None
+            }
+        };
 
         Self {
             config,

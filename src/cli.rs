@@ -103,6 +103,13 @@ pub struct Cli {
     #[arg(long, value_name = "THRESHOLD")]
     pub vad_threshold: Option<f32>,
 
+    /// VAD backend: auto, energy, whisper (default: auto)
+    /// - auto: Whisper VAD for Whisper engine, Energy for Parakeet
+    /// - energy: Fast RMS-based detection, no model download needed
+    /// - whisper: Silero VAD via whisper-rs, more accurate, needs model
+    #[arg(long, value_name = "BACKEND")]
+    pub vad_backend: Option<String>,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }

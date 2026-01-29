@@ -3,16 +3,19 @@
 //! Provides VAD to filter silence-only recordings before transcription,
 //! preventing Whisper hallucinations when processing silence.
 //!
-//! Uses an energy-based approach that analyzes audio amplitude to detect
-//! speech presence. This works well for filtering out completely silent
-//! or near-silent recordings without requiring external model downloads.
+//! Two backends are available:
+//! - **Energy VAD**: Simple RMS-based detection, no model needed, fast
+//! - **Whisper VAD**: Silero model via whisper-rs, more accurate, requires model download
 
 mod energy;
+mod whisper_vad;
 
-use crate::config::Config;
+use crate::config::{Config, TranscriptionEngine, VadBackend};
 use crate::error::VadError;
+use std::path::PathBuf;
 
 pub use energy::EnergyVad;
+pub use whisper_vad::WhisperVad;
 
 /// Result of voice activity detection
 #[derive(Debug, Clone)]
@@ -42,13 +45,72 @@ pub trait VoiceActivityDetector: Send + Sync {
 
 /// Create a VAD instance based on configuration
 ///
-/// Returns None if VAD is disabled
-pub fn create_vad(config: &Config) -> Option<Box<dyn VoiceActivityDetector>> {
+/// Returns None if VAD is disabled, or Err if initialization fails
+pub fn create_vad(config: &Config) -> Result<Option<Box<dyn VoiceActivityDetector>>, VadError> {
     if !config.vad.enabled {
-        return None;
+        return Ok(None);
     }
 
-    Some(Box::new(EnergyVad::new(&config.vad)))
+    // Determine which backend to use
+    let backend = match config.vad.backend {
+        VadBackend::Auto => {
+            // Auto-select: Whisper VAD for Whisper engine, Energy for Parakeet
+            match config.engine {
+                TranscriptionEngine::Whisper => VadBackend::Whisper,
+                TranscriptionEngine::Parakeet => VadBackend::Energy,
+            }
+        }
+        explicit => explicit,
+    };
+
+    let vad: Box<dyn VoiceActivityDetector> = match backend {
+        VadBackend::Energy | VadBackend::Auto => {
+            tracing::info!("Using Energy VAD backend");
+            Box::new(EnergyVad::new(&config.vad))
+        }
+        VadBackend::Whisper => {
+            let model_path = resolve_whisper_vad_model_path(&config.vad)?;
+            tracing::info!("Using Whisper VAD backend with model {:?}", model_path);
+            Box::new(WhisperVad::new(&model_path, &config.vad)?)
+        }
+    };
+
+    Ok(Some(vad))
+}
+
+/// Resolve the path to the Whisper VAD model
+fn resolve_whisper_vad_model_path(config: &crate::config::VadConfig) -> Result<PathBuf, VadError> {
+    // If model path is explicitly configured, use it
+    if let Some(ref model) = config.model {
+        let path = PathBuf::from(model);
+        if path.exists() {
+            return Ok(path);
+        }
+        return Err(VadError::ModelNotFound(model.clone()));
+    }
+
+    // Use default model location
+    let models_dir = Config::models_dir();
+    let model_path = models_dir.join("ggml-silero-vad.bin");
+
+    if model_path.exists() {
+        Ok(model_path)
+    } else {
+        Err(VadError::ModelNotFound(format!(
+            "{}. Download with: voxtype setup vad",
+            model_path.display()
+        )))
+    }
+}
+
+/// Get the download URL for the Whisper VAD model
+pub fn get_whisper_vad_model_url() -> &'static str {
+    "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin"
+}
+
+/// Get the default VAD model filename
+pub fn get_whisper_vad_model_filename() -> &'static str {
+    "ggml-silero-vad.bin"
 }
 
 #[cfg(test)]
@@ -73,15 +135,34 @@ mod tests {
         let config = Config::default();
         // VAD is disabled by default
         assert!(!config.vad.enabled);
-        let vad = create_vad(&config);
+        let vad = create_vad(&config).unwrap();
         assert!(vad.is_none());
     }
 
     #[test]
-    fn test_create_vad_enabled() {
+    fn test_create_vad_energy_backend() {
         let mut config = Config::default();
         config.vad.enabled = true;
-        let vad = create_vad(&config);
+        config.vad.backend = VadBackend::Energy;
+        let vad = create_vad(&config).unwrap();
         assert!(vad.is_some());
+    }
+
+    #[test]
+    fn test_create_vad_auto_parakeet_uses_energy() {
+        let mut config = Config::default();
+        config.vad.enabled = true;
+        config.vad.backend = VadBackend::Auto;
+        config.engine = TranscriptionEngine::Parakeet;
+        // Auto + Parakeet = Energy (no model needed)
+        let vad = create_vad(&config).unwrap();
+        assert!(vad.is_some());
+    }
+
+    #[test]
+    fn test_whisper_vad_model_url() {
+        let url = get_whisper_vad_model_url();
+        assert!(url.contains("huggingface"));
+        assert!(url.contains("silero"));
     }
 }

@@ -1613,6 +1613,32 @@ enabled = true
 voxtype --vad daemon
 ```
 
+### backend
+
+**Type:** String (`auto`, `energy`, `whisper`)
+**Default:** `auto`
+**Required:** No
+
+VAD detection algorithm to use:
+
+- `auto` - Automatically select based on transcription engine:
+  - Whisper engine: uses Whisper VAD (more accurate, requires model)
+  - Parakeet engine: uses Energy VAD (fast, no model needed)
+- `energy` - Simple RMS energy-based detection. Fast and works with any engine, no model download required.
+- `whisper` - Silero VAD via whisper-rs. More accurate speech detection but requires downloading the VAD model with `voxtype setup vad`.
+
+**Example:**
+```toml
+[vad]
+enabled = true
+backend = "energy"  # Use fast energy-based detection
+```
+
+**CLI override:**
+```bash
+voxtype --vad --vad-backend whisper daemon
+```
+
 ### threshold
 
 **Type:** Float (0.0 - 1.0)

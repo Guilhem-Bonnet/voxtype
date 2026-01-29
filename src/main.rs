@@ -141,6 +141,20 @@ async fn main() -> anyhow::Result<()> {
     if let Some(threshold) = cli.vad_threshold {
         config.vad.threshold = threshold.clamp(0.0, 1.0);
     }
+    if let Some(ref backend) = cli.vad_backend {
+        config.vad.backend = match backend.to_lowercase().as_str() {
+            "auto" => config::VadBackend::Auto,
+            "energy" => config::VadBackend::Energy,
+            "whisper" => config::VadBackend::Whisper,
+            _ => {
+                eprintln!(
+                    "Unknown VAD backend '{}'. Valid options: auto, energy, whisper",
+                    backend
+                );
+                std::process::exit(1);
+            }
+        };
+    }
 
     // Run the appropriate command
     match cli.command.unwrap_or(Commands::Daemon) {

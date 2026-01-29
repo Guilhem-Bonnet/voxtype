@@ -1446,8 +1446,20 @@ voxtype --vad daemon
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enabled` | `false` | Enable VAD filtering |
+| `backend` | `auto` | Detection algorithm: `auto`, `energy`, `whisper` |
 | `threshold` | `0.5` | Sensitivity (0.0 = very sensitive, 1.0 = aggressive) |
 | `min_speech_duration_ms` | `100` | Minimum speech required (ms) |
+
+### VAD Backends
+
+- **auto** (default): Selects the best backend for your transcription engine
+  - Whisper engine → Whisper VAD (requires model download)
+  - Parakeet engine → Energy VAD (no model needed)
+- **energy**: Fast RMS-based detection. Works with any engine, no model download required.
+- **whisper**: Silero VAD via whisper-rs. More accurate but requires downloading the model:
+  ```bash
+  voxtype setup vad
+  ```
 
 ### When to Use VAD
 
@@ -1458,7 +1470,7 @@ VAD is helpful if you:
 
 ### How It Works
 
-VAD uses energy-based analysis to detect speech. Recordings where speech energy falls below the threshold are rejected before transcription, and a "cancelled" feedback sound is played instead of transcribing silence.
+Recordings where speech falls below the detection threshold are rejected before transcription, and a "cancelled" feedback sound is played instead of transcribing silence.
 
 ---
 
