@@ -723,9 +723,10 @@ option = "value"</code></pre>
 **Checklist for releases:**
 1. Create GitHub release with notes following the style above
 2. Add matching article to `website/news/index.html`
-3. Update `packaging/arch-bin/voxtype-bin.install` post_upgrade() message with current version highlights
-4. Commit and push website changes
-5. Push AUR package updates
+3. Update download examples in `website/index.html` (deb/rpm URLs with new version)
+4. Update `packaging/arch-bin/voxtype-bin.install` post_upgrade() message with current version highlights
+5. Commit and push website changes
+6. Push AUR package updates
 
 ## Website
 
