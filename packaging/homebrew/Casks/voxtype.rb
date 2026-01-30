@@ -20,11 +20,62 @@ cask "voxtype" do
     # Create config directory
     system_command "/bin/mkdir", args: ["-p", "#{ENV["HOME"]}/Library/Application Support/voxtype"]
 
+    # Create logs directory
+    system_command "/bin/mkdir", args: ["-p", "#{ENV["HOME"]}/Library/Logs/voxtype"]
+
     # Create symlink for CLI access
     system_command "/bin/ln", args: ["-sf", "/Applications/Voxtype.app/Contents/MacOS/voxtype", "#{HOMEBREW_PREFIX}/bin/voxtype"]
+
+    # Install LaunchAgent for auto-start
+    launch_agents_dir = "#{ENV["HOME"]}/Library/LaunchAgents"
+    system_command "/bin/mkdir", args: ["-p", launch_agents_dir]
+
+    plist_path = "#{launch_agents_dir}/io.voxtype.daemon.plist"
+    plist_content = <<~PLIST
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0">
+      <dict>
+          <key>Label</key>
+          <string>io.voxtype.daemon</string>
+          <key>ProgramArguments</key>
+          <array>
+              <string>/Applications/Voxtype.app/Contents/MacOS/voxtype</string>
+              <string>daemon</string>
+          </array>
+          <key>RunAtLoad</key>
+          <true/>
+          <key>KeepAlive</key>
+          <true/>
+          <key>StandardOutPath</key>
+          <string>#{ENV["HOME"]}/Library/Logs/voxtype/stdout.log</string>
+          <key>StandardErrorPath</key>
+          <string>#{ENV["HOME"]}/Library/Logs/voxtype/stderr.log</string>
+          <key>EnvironmentVariables</key>
+          <dict>
+              <key>PATH</key>
+              <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+          </dict>
+          <key>ProcessType</key>
+          <string>Interactive</string>
+          <key>Nice</key>
+          <integer>-10</integer>
+      </dict>
+      </plist>
+    PLIST
+
+    File.write(plist_path, plist_content)
+
+    # Load the LaunchAgent
+    system_command "/bin/launchctl", args: ["load", plist_path]
   end
 
   uninstall_postflight do
+    # Unload and remove LaunchAgent
+    plist_path = "#{ENV["HOME"]}/Library/LaunchAgents/io.voxtype.daemon.plist"
+    system_command "/bin/launchctl", args: ["unload", plist_path] if File.exist?(plist_path)
+    system_command "/bin/rm", args: ["-f", plist_path]
+
     # Remove CLI symlink
     system_command "/bin/rm", args: ["-f", "#{HOMEBREW_PREFIX}/bin/voxtype"]
   end
@@ -41,6 +92,8 @@ cask "voxtype" do
     If macOS says the app is "damaged", run:
        xattr -cr /Applications/Voxtype.app
 
+    The daemon starts automatically at login.
+
     To complete setup:
 
     1. Download a speech model:
@@ -51,12 +104,9 @@ cask "voxtype" do
        - Input Monitoring: Add Voxtype
        - Accessibility: Add Voxtype
 
-    3. Start the daemon:
-       voxtype daemon
+    Default hotkey: Right Option (hold to record)
 
-    To start at login:
-       voxtype setup launchd
-
-    Default hotkey: Right Option
+    Optional: Run the menu bar helper for status icon:
+       voxtype menubar
   EOS
 end
