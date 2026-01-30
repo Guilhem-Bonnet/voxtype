@@ -20,6 +20,9 @@ cask "voxtype" do
     # Remove quarantine attribute (app is unsigned)
     system_command "/usr/bin/xattr", args: ["-cr", "/Applications/Voxtype.app"]
 
+    # Clean up any stale state from previous installs
+    system_command "/bin/rm", args: ["-rf", "/tmp/voxtype"]
+
     # Create config directory
     system_command "/bin/mkdir", args: ["-p", "#{ENV["HOME"]}/Library/Application Support/voxtype"]
 
@@ -92,15 +95,18 @@ cask "voxtype" do
   ]
 
   caveats <<~EOS
-    Voxtype is installed and the daemon will start automatically.
+    Voxtype is installed and will start automatically at login.
 
-    To complete setup:
+    First-time setup:
 
-    1. Download a speech model:
+    1. If prompted "Voxtype was blocked", go to System Settings >
+       Privacy & Security and click "Open Anyway"
+
+    2. Download a speech model:
        voxtype setup --download --model parakeet-tdt-0.6b-v3-int8
 
-    2. Grant permissions when prompted, or manually in System Settings:
-       Privacy & Security > Microphone, Input Monitoring, Accessibility
+    3. Grant Input Monitoring permission in System Settings >
+       Privacy & Security > Input Monitoring (required for hotkey)
 
     Default hotkey: Right Option (hold to record, release to transcribe)
 
