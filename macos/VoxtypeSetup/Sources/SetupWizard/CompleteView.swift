@@ -4,46 +4,46 @@ struct CompleteView: View {
     @EnvironmentObject var setupState: SetupState
 
     var body: some View {
-        VStack(spacing: 30) {
-            Spacer()
+        VStack(spacing: 16) {
+            Spacer(minLength: 10)
 
             Image(systemName: "checkmark.circle.fill")
                 .resizable()
-                .frame(width: 80, height: 80)
+                .frame(width: 60, height: 60)
                 .foregroundColor(.green)
 
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 Text("You're All Set!")
-                    .font(.largeTitle)
+                    .font(.title)
                     .fontWeight(.bold)
 
                 Text("Voxtype is ready to use")
-                    .font(.title3)
+                    .font(.body)
                     .foregroundColor(.secondary)
             }
 
             // Usage instructions
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 12) {
                 InstructionRow(
                     step: "1",
                     title: "Hold your hotkey",
-                    description: "By default, hold the Right Option key to start recording"
+                    description: "Hold the Right Option key to start recording"
                 )
 
                 InstructionRow(
                     step: "2",
                     title: "Speak clearly",
-                    description: "Talk normally - you'll see the orange mic indicator in your menu bar"
+                    description: "You'll see an orange mic indicator in your menu bar"
                 )
 
                 InstructionRow(
                     step: "3",
                     title: "Release to transcribe",
-                    description: "Let go of the key and your speech will be typed at your cursor"
+                    description: "Let go and your speech will be typed at your cursor"
                 )
             }
-            .padding(.horizontal, 60)
-            .padding(.vertical, 20)
+            .padding(.horizontal, 50)
+            .padding(.vertical, 12)
 
             // Hotkey reminder
             HStack {
@@ -54,26 +54,28 @@ struct CompleteView: View {
                 Text("Right Option (⌥)")
                     .fontWeight(.medium)
             }
-            .padding()
+            .padding(10)
             .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(10)
+            .cornerRadius(8)
 
-            Spacer()
+            Spacer(minLength: 10)
 
             // Actions
             HStack(spacing: 20) {
                 Button("Open Preferences") {
-                    setupState.setupComplete = true
+                    setupState.markWizardComplete()
                 }
                 .buttonStyle(WizardButtonStyle())
 
                 Button("Start Using Voxtype") {
+                    // Save completion state and quit immediately
+                    UserDefaults.standard.set(true, forKey: "wizardCompleted")
                     NSApplication.shared.terminate(nil)
                 }
                 .buttonStyle(WizardButtonStyle(isPrimary: true))
             }
             .padding(.horizontal, 40)
-            .padding(.bottom, 30)
+            .padding(.bottom, 20)
         }
     }
 }
@@ -84,20 +86,21 @@ struct InstructionRow: View {
     let description: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
+        HStack(alignment: .top, spacing: 12) {
             Text(step)
-                .font(.title2)
+                .font(.body)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
-                .frame(width: 32, height: 32)
+                .frame(width: 24, height: 24)
                 .background(Color.accentColor)
                 .clipShape(Circle())
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(title)
+                    .font(.callout)
                     .fontWeight(.medium)
                 Text(description)
-                    .font(.callout)
+                    .font(.caption)
                     .foregroundColor(.secondary)
             }
 

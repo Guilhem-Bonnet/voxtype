@@ -2,13 +2,13 @@ import SwiftUI
 
 struct PreferencesView: View {
     @EnvironmentObject var setupState: SetupState
-    @StateObject private var cli = VoxtypeCLI.shared
     @StateObject private var permissions = PermissionChecker.shared
 
     @State private var selectedEngine: TranscriptionEngine = .parakeet
     @State private var selectedModel: String = ""
     @State private var autoStartEnabled: Bool = false
     @State private var showingModelDownload = false
+    @State private var daemonStatus: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -52,7 +52,7 @@ struct PreferencesView: View {
                             }
                             .pickerStyle(.segmented)
                             .onChange(of: selectedEngine) { _ in
-                                _ = cli.setEngine(selectedEngine)
+                                _ = VoxtypeCLI.shared.setEngine(selectedEngine)
                             }
 
                             Text("Model")
@@ -77,7 +77,7 @@ struct PreferencesView: View {
                             PermissionStatusRow(
                                 title: "Microphone",
                                 isGranted: permissions.hasMicrophoneAccess,
-                                action: { permissions.requestMicrophoneAccess { _ in } }
+                                action: { permissions.openMicrophoneSettings() }
                             )
                             PermissionStatusRow(
                                 title: "Accessibility",
@@ -99,9 +99,9 @@ struct PreferencesView: View {
                         }
                         .onChange(of: autoStartEnabled) { newValue in
                             if newValue {
-                                _ = cli.installLaunchAgent()
+                                _ = VoxtypeCLI.shared.installLaunchAgent()
                             } else {
-                                _ = cli.uninstallLaunchAgent()
+                                _ = VoxtypeCLI.shared.uninstallLaunchAgent()
                             }
                         }
                     }
@@ -110,11 +110,11 @@ struct PreferencesView: View {
                     PreferenceSection(title: "Daemon", icon: "gearshape.2") {
                         HStack {
                             Button("Restart Daemon") {
-                                cli.restartDaemon()
+                                VoxtypeCLI.shared.restartDaemon()
                             }
 
                             Button("Stop Daemon") {
-                                cli.stopDaemon()
+                                VoxtypeCLI.shared.stopDaemon()
                             }
 
                             Spacer()
@@ -150,8 +150,7 @@ struct PreferencesView: View {
             // Footer
             HStack {
                 Button("Run Setup Again") {
-                    setupState.setupComplete = false
-                    setupState.currentStep = .welcome
+                    setupState.resetWizard()
                 }
                 .buttonStyle(.borderless)
 
@@ -175,11 +174,13 @@ struct PreferencesView: View {
     }
 
     var daemonRunning: Bool {
-        cli.getStatus() != "stopped" && !cli.getStatus().isEmpty
+        !daemonStatus.isEmpty && daemonStatus != "stopped"
     }
 
     func loadCurrentSettings() {
+        let cli = VoxtypeCLI.shared
         autoStartEnabled = cli.hasLaunchAgent()
+        daemonStatus = cli.getStatus()
         permissions.refresh()
 
         // Load current engine and model from config
@@ -247,12 +248,32 @@ struct ModelDownloadSheet: View {
     let onSelect: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var cli = VoxtypeCLI.shared
     @State private var selectedModel: String = ""
     @State private var isDownloading = false
 
-    var models: [ModelInfo] {
-        cli.availableModels().filter { $0.engine == selectedEngine }
+    // Static model lists
+    private let parakeetModels: [ModelInfo] = [
+        ModelInfo(name: "parakeet-tdt-0.6b-v3-int8", engine: .parakeet,
+                 description: "Fast, optimized for Apple Silicon", size: "670 MB"),
+        ModelInfo(name: "parakeet-tdt-0.6b-v3", engine: .parakeet,
+                 description: "Full precision", size: "1.2 GB"),
+    ]
+
+    private let whisperModels: [ModelInfo] = [
+        ModelInfo(name: "large-v3-turbo", engine: .whisper,
+                 description: "Best accuracy, multilingual", size: "1.6 GB"),
+        ModelInfo(name: "medium.en", engine: .whisper,
+                 description: "Good accuracy, English only", size: "1.5 GB"),
+        ModelInfo(name: "small.en", engine: .whisper,
+                 description: "Balanced speed/accuracy", size: "500 MB"),
+        ModelInfo(name: "base.en", engine: .whisper,
+                 description: "Fast, English only", size: "145 MB"),
+        ModelInfo(name: "tiny.en", engine: .whisper,
+                 description: "Fastest, lower accuracy", size: "75 MB"),
+    ]
+
+    private var models: [ModelInfo] {
+        selectedEngine == .parakeet ? parakeetModels : whisperModels
     }
 
     var body: some View {
@@ -281,7 +302,7 @@ struct ModelDownloadSheet: View {
             .frame(height: 200)
 
             if isDownloading {
-                ProgressView(value: cli.downloadProgress)
+                ProgressView()
                     .progressViewStyle(.linear)
             }
 
@@ -306,6 +327,7 @@ struct ModelDownloadSheet: View {
         isDownloading = true
         Task {
             do {
+                let cli = VoxtypeCLI.shared
                 try await cli.downloadModel(selectedModel, engine: selectedEngine)
                 _ = cli.setModel(selectedModel, engine: selectedEngine)
                 await MainActor.run {

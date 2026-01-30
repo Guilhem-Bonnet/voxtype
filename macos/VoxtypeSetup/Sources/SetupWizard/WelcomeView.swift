@@ -4,16 +4,16 @@ struct WelcomeView: View {
     @EnvironmentObject var setupState: SetupState
 
     var body: some View {
-        VStack(spacing: 30) {
+        VStack(spacing: 20) {
             Spacer()
 
             // App icon placeholder
             Image(systemName: "mic.circle.fill")
                 .resizable()
-                .frame(width: 80, height: 80)
+                .frame(width: 70, height: 70)
                 .foregroundColor(.accentColor)
 
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 Text("Welcome to Voxtype")
                     .font(.largeTitle)
                     .fontWeight(.bold)
@@ -23,7 +23,7 @@ struct WelcomeView: View {
                     .foregroundColor(.secondary)
             }
 
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
                 FeatureRow(icon: "hand.tap", title: "Push-to-Talk",
                           description: "Hold a key to record, release to transcribe")
                 FeatureRow(icon: "text.cursor", title: "Type Anywhere",
@@ -31,8 +31,8 @@ struct WelcomeView: View {
                 FeatureRow(icon: "bolt", title: "Fast & Private",
                           description: "Runs locally on your Mac, no cloud required")
             }
-            .padding(.horizontal, 60)
-            .padding(.vertical, 20)
+            .padding(.horizontal, 50)
+            .padding(.vertical, 16)
 
             Spacer()
 
@@ -47,7 +47,7 @@ struct WelcomeView: View {
                 .buttonStyle(WizardButtonStyle(isPrimary: true))
             }
             .padding(.horizontal, 40)
-            .padding(.bottom, 30)
+            .padding(.bottom, 24)
         }
     }
 }

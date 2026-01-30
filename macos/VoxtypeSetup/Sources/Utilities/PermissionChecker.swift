@@ -24,76 +24,88 @@ class PermissionChecker: ObservableObject {
     // MARK: - Microphone
 
     private func checkMicrophoneAccess() {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized:
-            hasMicrophoneAccess = true
-        case .notDetermined, .denied, .restricted:
-            hasMicrophoneAccess = false
-        @unknown default:
-            hasMicrophoneAccess = false
-        }
+        // Check confirmation from user (permission is for Voxtype.app, not this app)
+        hasMicrophoneAccess = UserDefaults.standard.bool(forKey: "microphoneConfirmed")
     }
 
-    func requestMicrophoneAccess(completion: @escaping (Bool) -> Void) {
-        AVCaptureDevice.requestAccess(for: .audio) { granted in
-            DispatchQueue.main.async {
-                self.hasMicrophoneAccess = granted
-                completion(granted)
-            }
-        }
+    func openMicrophoneSettings() {
+        // Use osascript to open Microphone privacy settings directly
+        let script = """
+        tell application "System Settings"
+            activate
+            reveal anchor "Privacy_Microphone" of pane id "com.apple.settings.PrivacySecurity.extension"
+        end tell
+        """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        try? process.run()
+    }
+
+    func confirmMicrophoneAccess() {
+        UserDefaults.standard.set(true, forKey: "microphoneConfirmed")
+        hasMicrophoneAccess = true
     }
 
     // MARK: - Accessibility
 
     private func checkAccessibilityAccess() {
-        hasAccessibilityAccess = AXIsProcessTrusted()
+        // Check if THIS app (setup wizard) is trusted
+        // Note: Main Voxtype.app permission must be confirmed manually
+        hasAccessibilityAccess = UserDefaults.standard.bool(forKey: "accessibilityConfirmed")
     }
 
     func requestAccessibilityAccess() {
-        // This opens System Settings to the Accessibility pane
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
-        AXIsProcessTrustedWithOptions(options as CFDictionary)
-
-        // Also open the settings pane directly for clarity
+        // Open System Settings to Accessibility
         openAccessibilitySettings()
     }
 
+    func confirmAccessibilityAccess() {
+        UserDefaults.standard.set(true, forKey: "accessibilityConfirmed")
+        hasAccessibilityAccess = true
+    }
+
     func openAccessibilitySettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-        NSWorkspace.shared.open(url)
+        // Use osascript to open Accessibility directly
+        let script = """
+        tell application "System Settings"
+            activate
+            reveal anchor "Privacy_Accessibility" of pane id "com.apple.settings.PrivacySecurity.extension"
+        end tell
+        """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        try? process.run()
     }
 
     // MARK: - Input Monitoring
 
     private func checkInputMonitoringAccess() {
-        // There's no direct API to check Input Monitoring permission
-        // We use a heuristic: try to create an event tap
-        // If it fails, we likely don't have permission
-        hasInputMonitoringAccess = canCreateEventTap()
-    }
-
-    private func canCreateEventTap() -> Bool {
-        // Attempt to create a passive event tap
-        // This will fail if Input Monitoring permission is not granted
-        let eventMask = (1 << CGEventType.keyDown.rawValue)
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: CGEventMask(eventMask),
-            callback: { _, _, event, _ in Unmanaged.passUnretained(event) },
-            userInfo: nil
-        ) else {
-            return false
-        }
-        // Clean up the tap
-        CFMachPortInvalidate(tap)
-        return true
+        // Check confirmation from user
+        hasInputMonitoringAccess = UserDefaults.standard.bool(forKey: "inputMonitoringConfirmed")
     }
 
     func openInputMonitoringSettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!
-        NSWorkspace.shared.open(url)
+        // Use osascript to open Input Monitoring directly
+        let script = """
+        tell application "System Settings"
+            activate
+            reveal anchor "Privacy_ListenEvent" of pane id "com.apple.settings.PrivacySecurity.extension"
+        end tell
+        """
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        try? process.run()
+    }
+
+    func confirmInputMonitoringAccess() {
+        UserDefaults.standard.set(true, forKey: "inputMonitoringConfirmed")
+        hasInputMonitoringAccess = true
     }
 
     // MARK: - Notifications (optional)

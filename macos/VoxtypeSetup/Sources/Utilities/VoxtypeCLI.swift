@@ -34,6 +34,21 @@ class VoxtypeCLI: ObservableObject {
         return !output.contains("model not found") && !output.contains("No model")
     }
 
+    /// Check if Voxtype has accessibility permission
+    /// Since we can't directly query another app's TCC status, we check if
+    /// the binary exists and is executable (user confirms in UI)
+    func checkAccessibilityPermission() -> Bool {
+        // We can't check another process's accessibility status
+        // Return true if voxtype binary exists (user must confirm manually)
+        return FileManager.default.isExecutableFile(atPath: binaryPath)
+    }
+
+    /// Check if Voxtype has input monitoring permission
+    func checkInputMonitoringPermission() -> Bool {
+        // Same limitation - we can't check another process's TCC status
+        return FileManager.default.isExecutableFile(atPath: binaryPath)
+    }
+
     /// Check if LaunchAgent is installed
     func hasLaunchAgent() -> Bool {
         let plistPath = FileManager.default.homeDirectoryForCurrentUser
@@ -92,13 +107,8 @@ class VoxtypeCLI: ObservableObject {
             }
         }
 
-        let args: [String]
-        switch engine {
-        case .parakeet:
-            args = ["setup", "parakeet", "--download", model]
-        case .whisper:
-            args = ["setup", "model", "--download", model]
-        }
+        // Correct syntax: voxtype setup --download --model <name>
+        let args = ["setup", "--download", "--model", model]
 
         // Run with progress monitoring
         let process = Process()
@@ -136,10 +146,12 @@ class VoxtypeCLI: ObservableObject {
     }
 
     private func parseProgress(_ line: String) -> Double? {
-        // Parse progress from CLI output like "Downloading... 45%"
-        if let range = line.range(of: #"(\d+)%"#, options: .regularExpression),
-           let percent = Double(line[range].dropLast()) {
-            return percent / 100.0
+        // Parse progress from CLI output like "2.5%" or "100.0%"
+        if let range = line.range(of: #"(\d+\.?\d*)%"#, options: .regularExpression) {
+            let percentStr = String(line[range].dropLast()) // Remove the %
+            if let percent = Double(percentStr) {
+                return percent / 100.0
+            }
         }
         return nil
     }
@@ -148,21 +160,21 @@ class VoxtypeCLI: ObservableObject {
 
     /// Set the transcription engine
     func setEngine(_ engine: TranscriptionEngine) -> Bool {
-        let engineStr = engine == .parakeet ? "parakeet" : "whisper"
-        let output = run(["config", "set", "engine", engineStr])
+        let args: [String]
+        switch engine {
+        case .parakeet:
+            args = ["setup", "parakeet", "--enable"]
+        case .whisper:
+            args = ["setup", "parakeet", "--disable"]
+        }
+        let output = run(args)
         return !output.contains("error")
     }
 
     /// Set the model
     func setModel(_ model: String, engine: TranscriptionEngine) -> Bool {
-        let args: [String]
-        switch engine {
-        case .parakeet:
-            args = ["setup", "parakeet", "--set", model]
-        case .whisper:
-            args = ["setup", "model", "--set", model]
-        }
-        let output = run(args)
+        // Use setup model --set for both engines
+        let output = run(["setup", "model", "--set", model])
         return !output.contains("error")
     }
 
@@ -171,7 +183,9 @@ class VoxtypeCLI: ObservableObject {
     /// Install the LaunchAgent for auto-start
     func installLaunchAgent() -> Bool {
         let output = run(["setup", "launchd"])
-        return !output.contains("error") && !output.contains("failed")
+        // Check for success message rather than absence of "failed"
+        // (launchctl may show "Load failed" warning but still succeed)
+        return output.contains("Installation complete")
     }
 
     /// Uninstall the LaunchAgent
@@ -257,11 +271,13 @@ enum TranscriptionEngine: String, CaseIterable {
 }
 
 struct ModelInfo: Identifiable {
-    let id = UUID()
     let name: String
     let engine: TranscriptionEngine
     let description: String
     let size: String
+
+    // Use name as stable identifier instead of UUID
+    var id: String { name }
 }
 
 enum CLIError: Error {

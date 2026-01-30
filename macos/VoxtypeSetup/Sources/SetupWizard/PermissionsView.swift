@@ -4,6 +4,7 @@ struct PermissionsView: View {
     @EnvironmentObject var setupState: SetupState
     @StateObject private var permissions = PermissionChecker.shared
     @State private var isCheckingPermissions = false
+    @State private var refreshTimer: Timer?
 
     var allPermissionsGranted: Bool {
         permissions.hasMicrophoneAccess &&
@@ -25,33 +26,42 @@ struct PermissionsView: View {
                 .padding(.bottom, 10)
 
             VStack(spacing: 16) {
-                PermissionRow(
+                ManualPermissionRow(
                     title: "Microphone",
-                    description: "To capture your voice for transcription",
+                    description: "Add Voxtype.app to Microphone list",
                     icon: "mic.fill",
                     isGranted: permissions.hasMicrophoneAccess,
-                    action: {
-                        permissions.requestMicrophoneAccess { _ in }
+                    openAction: {
+                        permissions.openMicrophoneSettings()
+                    },
+                    confirmAction: {
+                        permissions.confirmMicrophoneAccess()
                     }
                 )
 
-                PermissionRow(
+                ManualPermissionRow(
                     title: "Accessibility",
-                    description: "To type transcribed text into applications",
+                    description: "Add Voxtype.app to Accessibility list",
                     icon: "accessibility",
                     isGranted: permissions.hasAccessibilityAccess,
-                    action: {
+                    openAction: {
                         permissions.requestAccessibilityAccess()
+                    },
+                    confirmAction: {
+                        permissions.confirmAccessibilityAccess()
                     }
                 )
 
-                PermissionRow(
+                ManualPermissionRow(
                     title: "Input Monitoring",
-                    description: "To detect your push-to-talk hotkey",
+                    description: "Add Voxtype.app to Input Monitoring list",
                     icon: "keyboard",
                     isGranted: permissions.hasInputMonitoringAccess,
-                    action: {
+                    openAction: {
                         permissions.openInputMonitoringSettings()
+                    },
+                    confirmAction: {
+                        permissions.confirmInputMonitoringAccess()
                     }
                 )
             }
@@ -113,6 +123,16 @@ struct PermissionsView: View {
             .padding(.horizontal, 40)
             .padding(.bottom, 30)
         }
+        .onAppear {
+            // Start polling for permission changes
+            refreshTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+                permissions.refresh()
+            }
+        }
+        .onDisappear {
+            refreshTimer?.invalidate()
+            refreshTimer = nil
+        }
     }
 }
 
@@ -150,6 +170,56 @@ struct PermissionRow: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+            }
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(10)
+    }
+}
+
+struct ManualPermissionRow: View {
+    let title: String
+    let description: String
+    let icon: String
+    let isGranted: Bool
+    let openAction: () -> Void
+    let confirmAction: () -> Void
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(isGranted ? .green : .accentColor)
+                .frame(width: 30)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .fontWeight(.medium)
+                Text(description)
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            if isGranted {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                    .font(.title2)
+            } else {
+                HStack(spacing: 8) {
+                    Button("Open Settings") {
+                        openAction()
+                    }
+                    .controlSize(.small)
+
+                    Button("Done") {
+                        confirmAction()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
             }
         }
         .padding()

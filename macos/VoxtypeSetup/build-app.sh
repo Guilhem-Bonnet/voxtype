@@ -54,8 +54,9 @@ cat > "$CONTENTS/Info.plist" << 'EOF'
 </plist>
 EOF
 
-# Sign the app
-codesign --force --deep --sign - "$APP_BUNDLE"
+# Sign the app with entitlements
+ENTITLEMENTS="$SCRIPT_DIR/VoxtypeSetup.entitlements"
+codesign --force --deep --sign - --entitlements "$ENTITLEMENTS" "$APP_BUNDLE"
 
 echo "Built: $APP_BUNDLE"
 echo ""

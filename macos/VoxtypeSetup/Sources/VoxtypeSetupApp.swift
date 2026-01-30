@@ -14,8 +14,6 @@ struct VoxtypeSetupApp: App {
                     .environmentObject(setupState)
             }
         }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
     }
 }
 
@@ -24,28 +22,24 @@ class SetupState: ObservableObject {
     @Published var setupComplete: Bool = false
     @Published var currentStep: SetupStep = .welcome
 
+    private let wizardCompletedKey = "wizardCompleted"
+
     init() {
-        // Check if setup has been completed before
-        setupComplete = checkSetupComplete()
+        // Only show preferences if wizard was explicitly completed
+        setupComplete = UserDefaults.standard.bool(forKey: wizardCompletedKey)
     }
 
-    private func checkSetupComplete() -> Bool {
-        // Setup is complete if:
-        // 1. All permissions are granted
-        // 2. A model is downloaded
-        // 3. LaunchAgent is installed
-        let permissions = PermissionChecker.shared
-        let hasPermissions = permissions.hasMicrophoneAccess &&
-                            permissions.hasAccessibilityAccess &&
-                            permissions.hasInputMonitoringAccess
-        let hasModel = VoxtypeCLI.shared.hasModel()
-        let hasLaunchAgent = VoxtypeCLI.shared.hasLaunchAgent()
-
-        return hasPermissions && hasModel && hasLaunchAgent
+    /// Mark wizard as completed (called when user finishes the wizard)
+    func markWizardComplete() {
+        UserDefaults.standard.set(true, forKey: wizardCompletedKey)
+        setupComplete = true
     }
 
-    func recheckSetup() {
-        setupComplete = checkSetupComplete()
+    /// Reset to show wizard again
+    func resetWizard() {
+        UserDefaults.standard.set(false, forKey: wizardCompletedKey)
+        setupComplete = false
+        currentStep = .welcome
     }
 }
 

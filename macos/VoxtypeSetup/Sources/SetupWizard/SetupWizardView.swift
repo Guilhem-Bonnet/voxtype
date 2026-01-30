@@ -8,8 +8,7 @@ struct SetupWizardView: View {
             // Progress indicator
             ProgressBar(currentStep: setupState.currentStep)
                 .padding(.horizontal, 40)
-                .padding(.top, 30)
-                .padding(.bottom, 20)
+                .padding(.vertical, 16)
 
             Divider()
 
@@ -28,9 +27,8 @@ struct SetupWizardView: View {
                     CompleteView()
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 600, height: 500)
+        .frame(width: 600, height: 550)
         .background(Color(NSColor.windowBackgroundColor))
     }
 }
