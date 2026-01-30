@@ -774,24 +774,29 @@ pub async fn run_checks(config: &Config) -> anyhow::Result<()> {
         }
     }
 
-    // Check whisper model
-    println!("\nWhisper Model:");
-    let model_name = &config.whisper.model;
-    let model_filename = crate::transcribe::whisper::get_model_filename(model_name);
-    let model_path = models_dir.join(&model_filename);
+    // Check whisper model (only if using Whisper engine)
+    if config.engine == crate::config::TranscriptionEngine::Whisper {
+        println!("\nWhisper Model:");
+        let model_name = &config.whisper.model;
+        let model_filename = crate::transcribe::whisper::get_model_filename(model_name);
+        let model_path = models_dir.join(&model_filename);
 
-    if model_path.exists() {
-        let size = std::fs::metadata(&model_path)
-            .map(|m| m.len() as f64 / 1024.0 / 1024.0)
-            .unwrap_or(0.0);
-        print_success(&format!(
-            "Model '{}' installed ({:.0} MB)",
-            model_name, size
-        ));
+        if model_path.exists() {
+            let size = std::fs::metadata(&model_path)
+                .map(|m| m.len() as f64 / 1024.0 / 1024.0)
+                .unwrap_or(0.0);
+            print_success(&format!(
+                "Model '{}' installed ({:.0} MB)",
+                model_name, size
+            ));
+        } else {
+            print_failure(&format!("Model '{}' not found", model_name));
+            println!("       Run: voxtype setup --download");
+            all_ok = false;
+        }
     } else {
-        print_failure(&format!("Model '{}' not found", model_name));
-        println!("       Run: voxtype setup --download");
-        all_ok = false;
+        println!("\nWhisper Model:");
+        print_info("Using Parakeet engine (Whisper model not required)");
     }
 
     // Check Parakeet models (experimental)
@@ -805,10 +810,11 @@ pub async fn run_checks(config: &Config) -> anyhow::Result<()> {
             if path.is_dir() {
                 let name = entry.file_name().to_string_lossy().to_string();
                 if name.contains("parakeet") {
-                    // Check if it has the required ONNX files
-                    let encoder_path = path.join("encoder-model.onnx");
-                    let has_encoder = encoder_path.exists();
+                    // Check if it has the required ONNX files (including quantized variants)
+                    let has_encoder = path.join("encoder-model.onnx").exists()
+                        || path.join("encoder-model.int8.onnx").exists();
                     let has_decoder = path.join("decoder_joint-model.onnx").exists()
+                        || path.join("decoder_joint-model.int8.onnx").exists()
                         || path.join("model.onnx").exists();
                     if has_encoder || has_decoder {
                         // Get total size of model files
