@@ -5,15 +5,21 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Header
+            Text("Voxtype")
+                .font(.headline)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+
             // Status section
             HStack {
                 Image(systemName: statusMonitor.iconName)
                     .foregroundColor(statusColor)
                 Text(statusMonitor.statusText)
-                    .fontWeight(.medium)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.bottom, 8)
 
             Divider()
 
@@ -66,8 +72,8 @@ struct MenuBarView: View {
 
             Divider()
 
-            Button(action: openSetup) {
-                Label("Open Setup...", systemImage: "gearshape")
+            Button(action: openSettings) {
+                Label("Settings...", systemImage: "gearshape")
             }
 
             Button(action: restartDaemon) {
@@ -81,7 +87,7 @@ struct MenuBarView: View {
             Divider()
 
             Button(action: quitApp) {
-                Label("Quit Menu Bar", systemImage: "power")
+                Label("Quit Voxtype Menu Bar", systemImage: "power")
             }
             .keyboardShortcut("q", modifiers: .command)
         }
@@ -125,18 +131,39 @@ struct MenuBarView: View {
         showNotification(title: "Voxtype", message: "Hotkey mode changed. Restart daemon to apply.")
     }
 
-    private func openSetup() {
-        // Try to open VoxtypeSetup from the app bundle
-        let setupPath = Bundle.main.bundlePath
-            .replacingOccurrences(of: "VoxtypeMenubar.app", with: "Voxtype.app/Contents/MacOS/VoxtypeSetup")
+    private func openSettings() {
+        // Try multiple locations for VoxtypeSetup
+        let possiblePaths = [
+            // Inside main app bundle
+            "/Applications/Voxtype.app/Contents/MacOS/VoxtypeSetup",
+            // Standalone app in Applications
+            "/Applications/VoxtypeSetup.app",
+            // Next to this menubar app
+            Bundle.main.bundlePath.replacingOccurrences(of: "VoxtypeMenubar.app", with: "VoxtypeSetup.app"),
+        ]
 
-        if FileManager.default.fileExists(atPath: setupPath) {
-            Process.launchedProcess(launchPath: setupPath, arguments: [])
-        } else {
-            // Fallback: open config file
-            let configPath = NSHomeDirectory() + "/Library/Application Support/voxtype/config.toml"
-            NSWorkspace.shared.open(URL(fileURLWithPath: configPath))
+        for path in possiblePaths {
+            if path.hasSuffix(".app") {
+                // It's an app bundle
+                if FileManager.default.fileExists(atPath: path) {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: path))
+                    return
+                }
+            } else {
+                // It's a binary
+                if FileManager.default.fileExists(atPath: path) {
+                    do {
+                        try Process.run(URL(fileURLWithPath: path), arguments: [])
+                        return
+                    } catch {
+                        continue
+                    }
+                }
+            }
         }
+
+        // Fallback: show notification that settings app not found
+        showNotification(title: "Voxtype", message: "Settings app not found. Edit config at ~/Library/Application Support/voxtype/config.toml")
     }
 
     private func restartDaemon() {
