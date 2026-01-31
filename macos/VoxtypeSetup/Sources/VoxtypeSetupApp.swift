@@ -35,8 +35,14 @@ struct SettingsView: View {
 /// Settings sections
 enum SettingsSection: String, CaseIterable, Identifiable {
     case general
+    case hotkey
+    case audio
     case models
+    case whisper
+    case remoteWhisper
     case output
+    case textProcessing
+    case notifications
     case permissions
     case advanced
 
@@ -45,8 +51,14 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: return "General"
+        case .hotkey: return "Hotkey"
+        case .audio: return "Audio"
         case .models: return "Models"
+        case .whisper: return "Whisper"
+        case .remoteWhisper: return "Remote Whisper"
         case .output: return "Output"
+        case .textProcessing: return "Text Processing"
+        case .notifications: return "Notifications"
         case .permissions: return "Permissions"
         case .advanced: return "Advanced"
         }
@@ -55,8 +67,14 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .general: return "gearshape"
+        case .hotkey: return "keyboard"
+        case .audio: return "mic"
         case .models: return "cpu"
+        case .whisper: return "waveform"
+        case .remoteWhisper: return "network"
         case .output: return "text.cursor"
+        case .textProcessing: return "text.quote"
+        case .notifications: return "bell"
         case .permissions: return "lock.shield"
         case .advanced: return "wrench.and.screwdriver"
         }
@@ -66,8 +84,14 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var view: some View {
         switch self {
         case .general: GeneralSettingsView()
+        case .hotkey: HotkeySettingsView()
+        case .audio: AudioSettingsView()
         case .models: ModelsSettingsView()
+        case .whisper: WhisperSettingsView()
+        case .remoteWhisper: RemoteWhisperSettingsView()
         case .output: OutputSettingsView()
+        case .textProcessing: TextProcessingSettingsView()
+        case .notifications: NotificationSettingsView()
         case .permissions: PermissionsSettingsView()
         case .advanced: AdvancedSettingsView()
         }

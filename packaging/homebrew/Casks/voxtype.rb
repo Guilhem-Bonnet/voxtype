@@ -13,6 +13,7 @@ cask "voxtype" do
   end
 
   depends_on macos: ">= :ventura"
+  depends_on formula: "terminal-notifier"
 
   app "Voxtype.app"
 
@@ -28,6 +29,13 @@ cask "voxtype" do
 
     # Create logs directory
     system_command "/bin/mkdir", args: ["-p", "#{ENV["HOME"]}/Library/Logs/voxtype"]
+
+    # Bundle terminal-notifier for notifications with custom icon
+    system_command "/bin/cp", args: [
+      "-R",
+      "#{HOMEBREW_PREFIX}/opt/terminal-notifier/terminal-notifier.app",
+      "/Applications/Voxtype.app/Contents/Resources/"
+    ]
 
     # Create symlink for CLI access
     system_command "/bin/ln", args: ["-sf", "/Applications/Voxtype.app/Contents/MacOS/voxtype", "#{HOMEBREW_PREFIX}/bin/voxtype"]

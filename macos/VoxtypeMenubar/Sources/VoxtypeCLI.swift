@@ -4,13 +4,13 @@ import Foundation
 enum VoxtypeCLI {
     /// Path to voxtype binary
     static var binaryPath: String {
-        // First try the app bundle location
+        // First try the app bundle location (works for both VoxtypeMenubar.app and VoxtypeSetup.app)
         let bundlePath = Bundle.main.bundlePath
-        let appBundlePath = bundlePath
-            .replacingOccurrences(of: "VoxtypeMenubar.app", with: "Voxtype.app/Contents/MacOS/voxtype")
+        let parentDir = (bundlePath as NSString).deletingLastPathComponent
+        let siblingBinaryPath = (parentDir as NSString).appendingPathComponent("Voxtype.app/Contents/MacOS/voxtype")
 
-        if FileManager.default.fileExists(atPath: appBundlePath) {
-            return appBundlePath
+        if FileManager.default.fileExists(atPath: siblingBinaryPath) {
+            return siblingBinaryPath
         }
 
         // Try /Applications
@@ -23,6 +23,12 @@ enum VoxtypeCLI {
         let homebrewPath = "/opt/homebrew/bin/voxtype"
         if FileManager.default.fileExists(atPath: homebrewPath) {
             return homebrewPath
+        }
+
+        // Try ~/.local/bin
+        let localBinPath = NSHomeDirectory() + "/.local/bin/voxtype"
+        if FileManager.default.fileExists(atPath: localBinPath) {
+            return localBinPath
         }
 
         // Fallback to PATH

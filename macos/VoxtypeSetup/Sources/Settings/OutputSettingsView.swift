@@ -76,67 +76,24 @@ struct OutputSettingsView: View {
     }
 
     private func loadSettings() {
-        let config = readConfig()
-
-        if let mode = config["output.mode"]?.replacingOccurrences(of: "\"", with: "") {
+        if let mode = ConfigManager.shared.getString("output.mode") {
             outputMode = mode
         }
 
-        if let fallback = config["output.fallback_to_clipboard"] {
-            fallbackToClipboard = fallback == "true"
+        if let fallback = ConfigManager.shared.getBool("output.fallback_to_clipboard") {
+            fallbackToClipboard = fallback
         }
 
-        if let delay = config["output.type_delay_ms"], let value = Int(delay) {
-            typeDelayMs = value
+        if let delay = ConfigManager.shared.getInt("output.type_delay_ms") {
+            typeDelayMs = delay
         }
 
-        if let submit = config["output.auto_submit"] {
-            autoSubmit = submit == "true"
+        if let submit = ConfigManager.shared.getBool("output.auto_submit") {
+            autoSubmit = submit
         }
-    }
-
-    private func readConfig() -> [String: String] {
-        let configPath = NSHomeDirectory() + "/Library/Application Support/voxtype/config.toml"
-        guard let content = try? String(contentsOfFile: configPath, encoding: .utf8) else {
-            return [:]
-        }
-
-        var result: [String: String] = [:]
-        var currentSection = ""
-
-        for line in content.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-
-            if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
-                currentSection = String(trimmed.dropFirst().dropLast())
-            } else if trimmed.contains("=") && !trimmed.hasPrefix("#") {
-                let parts = trimmed.components(separatedBy: "=")
-                if parts.count >= 2 {
-                    let key = parts[0].trimmingCharacters(in: .whitespaces)
-                    let value = parts.dropFirst().joined(separator: "=").trimmingCharacters(in: .whitespaces)
-                    let fullKey = currentSection.isEmpty ? key : "\(currentSection).\(key)"
-                    result[fullKey] = value
-                }
-            }
-        }
-
-        return result
     }
 
     private func updateConfig(key: String, value: String, section: String? = nil) {
-        let configPath = NSHomeDirectory() + "/Library/Application Support/voxtype/config.toml"
-        guard var content = try? String(contentsOfFile: configPath, encoding: .utf8) else {
-            return
-        }
-
-        let pattern = "\(key)\\s*=\\s*[^\\n]*"
-        let replacement = "\(key) = \(value)"
-
-        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-            let range = NSRange(content.startIndex..., in: content)
-            content = regex.stringByReplacingMatches(in: content, options: [], range: range, withTemplate: replacement)
-        }
-
-        try? content.write(toFile: configPath, atomically: true, encoding: .utf8)
+        ConfigManager.shared.updateConfig(key: key, value: value, section: section)
     }
 }

@@ -5,16 +5,34 @@ struct GeneralSettingsView: View {
     @State private var hotkeyMode: String = "push_to_talk"
     @State private var hotkey: String = "RIGHTALT"
     @State private var daemonRunning: Bool = false
+    @State private var needsRestart: Bool = false
 
     var body: some View {
         Form {
+            if needsRestart {
+                Section {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text("Engine changed. Restart daemon to apply.")
+                        Spacer()
+                        Button("Restart Now") {
+                            restartDaemon()
+                            needsRestart = false
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+            }
+
             Section {
                 Picker("Transcription Engine", selection: $selectedEngine) {
                     Text("Parakeet (Fast)").tag("parakeet")
                     Text("Whisper").tag("whisper")
                 }
                 .onChange(of: selectedEngine) { newValue in
-                    updateConfig(key: "engine", value: "\"\(newValue)\"")
+                    ConfigManager.shared.updateConfig(key: "engine", value: "\"\(newValue)\"")
+                    needsRestart = true
                 }
 
                 Text("Parakeet is faster and recommended for most users.")
@@ -34,7 +52,8 @@ struct GeneralSettingsView: View {
                     Text("F15").tag("F15")
                 }
                 .onChange(of: hotkey) { newValue in
-                    updateConfig(key: "key", value: "\"\(newValue)\"", section: "[hotkey]")
+                    ConfigManager.shared.updateConfig(key: "key", value: "\"\(newValue)\"", section: "[hotkey]")
+                    needsRestart = true
                 }
 
                 Picker("Mode", selection: $hotkeyMode) {
@@ -42,7 +61,8 @@ struct GeneralSettingsView: View {
                     Text("Toggle (press to start/stop)").tag("toggle")
                 }
                 .onChange(of: hotkeyMode) { newValue in
-                    updateConfig(key: "mode", value: "\"\(newValue)\"", section: "[hotkey]")
+                    ConfigManager.shared.updateConfig(key: "mode", value: "\"\(newValue)\"", section: "[hotkey]")
+                    needsRestart = true
                 }
             } header: {
                 Text("Hotkey")
@@ -79,18 +99,16 @@ struct GeneralSettingsView: View {
     }
 
     private func loadSettings() {
-        let config = readConfig()
-
-        if let engine = config["engine"] {
-            selectedEngine = engine.replacingOccurrences(of: "\"", with: "")
+        if let engine = ConfigManager.shared.getString("engine") {
+            selectedEngine = engine
         }
 
-        if let key = config["hotkey.key"] {
-            hotkey = key.replacingOccurrences(of: "\"", with: "")
+        if let key = ConfigManager.shared.getString("hotkey.key") {
+            hotkey = key
         }
 
-        if let mode = config["hotkey.mode"] {
-            hotkeyMode = mode.replacingOccurrences(of: "\"", with: "")
+        if let mode = ConfigManager.shared.getString("hotkey.mode") {
+            hotkeyMode = mode
         }
     }
 
@@ -101,65 +119,37 @@ struct GeneralSettingsView: View {
     }
 
     private func startDaemon() {
-        VoxtypeCLI.run(["daemon"], wait: false)
+        _ = VoxtypeCLI.run(["daemon"], wait: false)
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             checkDaemonStatus()
         }
     }
 
     private func restartDaemon() {
-        let task = Process()
-        task.launchPath = "/bin/launchctl"
-        task.arguments = ["kickstart", "-k", "gui/\(getuid())/io.voxtype.daemon"]
-        try? task.run()
+        // Kill existing daemon
+        let killTask = Process()
+        killTask.launchPath = "/usr/bin/pkill"
+        killTask.arguments = ["-x", "voxtype"]
+        killTask.standardOutput = FileHandle.nullDevice
+        killTask.standardError = FileHandle.nullDevice
+        try? killTask.run()
+        killTask.waitUntilExit()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            checkDaemonStatus()
-        }
-    }
+        // Clean up state
+        let rmTask = Process()
+        rmTask.launchPath = "/bin/rm"
+        rmTask.arguments = ["-rf", "/tmp/voxtype"]
+        rmTask.standardOutput = FileHandle.nullDevice
+        rmTask.standardError = FileHandle.nullDevice
+        try? rmTask.run()
+        rmTask.waitUntilExit()
 
-    private func readConfig() -> [String: String] {
-        let configPath = NSHomeDirectory() + "/Library/Application Support/voxtype/config.toml"
-        guard let content = try? String(contentsOfFile: configPath, encoding: .utf8) else {
-            return [:]
-        }
-
-        var result: [String: String] = [:]
-        var currentSection = ""
-
-        for line in content.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-
-            if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
-                currentSection = String(trimmed.dropFirst().dropLast())
-            } else if trimmed.contains("=") && !trimmed.hasPrefix("#") {
-                let parts = trimmed.components(separatedBy: "=")
-                if parts.count >= 2 {
-                    let key = parts[0].trimmingCharacters(in: .whitespaces)
-                    let value = parts.dropFirst().joined(separator: "=").trimmingCharacters(in: .whitespaces)
-                    let fullKey = currentSection.isEmpty ? key : "\(currentSection).\(key)"
-                    result[fullKey] = value
-                }
+        // Start daemon fresh
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            _ = VoxtypeCLI.run(["daemon"], wait: false)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                self.checkDaemonStatus()
             }
         }
-
-        return result
-    }
-
-    private func updateConfig(key: String, value: String, section: String? = nil) {
-        let configPath = NSHomeDirectory() + "/Library/Application Support/voxtype/config.toml"
-        guard var content = try? String(contentsOfFile: configPath, encoding: .utf8) else {
-            return
-        }
-
-        let pattern = "\(key)\\s*=\\s*\"[^\"]*\""
-        let replacement = "\(key) = \(value)"
-
-        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-            let range = NSRange(content.startIndex..., in: content)
-            content = regex.stringByReplacingMatches(in: content, options: [], range: range, withTemplate: replacement)
-        }
-
-        try? content.write(toFile: configPath, atomically: true, encoding: .utf8)
     }
 }

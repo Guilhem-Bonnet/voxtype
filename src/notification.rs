@@ -48,18 +48,35 @@ async fn send_linux(title: &str, body: &str) {
     }
 }
 
-/// Send a native macOS notification using UserNotifications framework
-/// This makes notifications appear under "Voxtype" in System Settings > Notifications
+/// Send a macOS notification using terminal-notifier
+/// Falls back to osascript if terminal-notifier is not installed
 #[cfg(target_os = "macos")]
 fn send_macos_native(title: &str, body: &str) {
-    use mac_notification_sys::send_notification;
+    // Try bundled terminal-notifier first, then system PATH, then osascript
+    let bundled_path =
+        "/Applications/Voxtype.app/Contents/Resources/terminal-notifier.app/Contents/MacOS/terminal-notifier";
 
-    // send_notification(title, subtitle, message, options)
-    if let Err(e) = send_notification(title, None, body, None) {
-        tracing::debug!("Failed to send native notification: {:?}", e);
-        // Fallback to osascript if native fails
-        send_macos_osascript_sync(title, body);
+    let notifier_paths = [bundled_path, "terminal-notifier"];
+
+    for notifier in notifier_paths {
+        let result = std::process::Command::new(notifier)
+            .args(["-title", title, "-message", body, "-sender", "io.voxtype.menubar"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+
+        match result {
+            Ok(status) if status.success() => {
+                tracing::debug!("Sent notification via {}", notifier);
+                return;
+            }
+            _ => continue,
+        }
     }
+
+    // Fallback to osascript
+    tracing::debug!("terminal-notifier not available, using osascript");
+    send_macos_osascript_sync(title, body);
 }
 
 /// Fallback notification via osascript (if native fails)

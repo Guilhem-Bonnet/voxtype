@@ -52,7 +52,17 @@ struct ModelsSettingsView: View {
                         }
                         .disabled(isDownloading)
 
-                        Text("~640 MB")
+                        Text("~640 MB - Quantized, fast")
+                            .foregroundColor(.secondary)
+                    }
+
+                    HStack {
+                        Button("Download parakeet-tdt-0.6b-v3") {
+                            downloadModel("parakeet-tdt-0.6b-v3")
+                        }
+                        .disabled(isDownloading)
+
+                        Text("~1.2 GB - Full precision")
                             .foregroundColor(.secondary)
                     }
                 }
@@ -60,8 +70,12 @@ struct ModelsSettingsView: View {
                 Divider()
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Whisper Models")
+                    Text("Whisper English-Only")
                         .font(.headline)
+
+                    Text("Optimized for English, faster and more accurate")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
 
                     HStack {
                         Button("Download base.en") {
@@ -69,7 +83,7 @@ struct ModelsSettingsView: View {
                         }
                         .disabled(isDownloading)
 
-                        Text("~142 MB - Good balance")
+                        Text("~142 MB")
                             .foregroundColor(.secondary)
                     }
 
@@ -79,7 +93,68 @@ struct ModelsSettingsView: View {
                         }
                         .disabled(isDownloading)
 
-                        Text("~466 MB - Better accuracy")
+                        Text("~466 MB")
+                            .foregroundColor(.secondary)
+                    }
+
+                    HStack {
+                        Button("Download medium.en") {
+                            downloadModel("medium.en")
+                        }
+                        .disabled(isDownloading)
+
+                        Text("~1.5 GB")
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Whisper Multilingual")
+                        .font(.headline)
+
+                    Text("Supports 99 languages, can translate to English")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    HStack {
+                        Button("Download base") {
+                            downloadModel("base")
+                        }
+                        .disabled(isDownloading)
+
+                        Text("~142 MB")
+                            .foregroundColor(.secondary)
+                    }
+
+                    HStack {
+                        Button("Download small") {
+                            downloadModel("small")
+                        }
+                        .disabled(isDownloading)
+
+                        Text("~466 MB")
+                            .foregroundColor(.secondary)
+                    }
+
+                    HStack {
+                        Button("Download medium") {
+                            downloadModel("medium")
+                        }
+                        .disabled(isDownloading)
+
+                        Text("~1.5 GB")
+                            .foregroundColor(.secondary)
+                    }
+
+                    HStack {
+                        Button("Download large-v3") {
+                            downloadModel("large-v3")
+                        }
+                        .disabled(isDownloading)
+
+                        Text("~3.1 GB - Best quality")
                             .foregroundColor(.secondary)
                     }
 
@@ -89,7 +164,7 @@ struct ModelsSettingsView: View {
                         }
                         .disabled(isDownloading)
 
-                        Text("~1.6 GB - Best quality")
+                        Text("~1.6 GB - Fast, near large quality")
                             .foregroundColor(.secondary)
                     }
                 }
@@ -146,14 +221,12 @@ struct ModelsSettingsView: View {
         installedModels = models
 
         // Get currently selected model from config
-        let config = readConfig()
-        if let engine = config["engine"]?.replacingOccurrences(of: "\"", with: ""),
-           engine == "parakeet" {
-            if let model = config["parakeet.model"]?.replacingOccurrences(of: "\"", with: "") {
+        if let engine = ConfigManager.shared.getString("engine"), engine == "parakeet" {
+            if let model = ConfigManager.shared.getString("parakeet.model") {
                 selectedModel = model
             }
         } else {
-            if let model = config["whisper.model"]?.replacingOccurrences(of: "\"", with: "") {
+            if let model = ConfigManager.shared.getString("whisper.model") {
                 selectedModel = model
             }
         }
@@ -163,11 +236,11 @@ struct ModelsSettingsView: View {
         let isParakeet = name.contains("parakeet")
 
         if isParakeet {
-            updateConfig(key: "engine", value: "\"parakeet\"")
-            updateConfig(key: "model", value: "\"\(name)\"", section: "[parakeet]")
+            ConfigManager.shared.updateConfig(key: "engine", value: "\"parakeet\"")
+            ConfigManager.shared.updateConfig(key: "model", value: "\"\(name)\"", section: "[parakeet]")
         } else {
-            updateConfig(key: "engine", value: "\"whisper\"")
-            updateConfig(key: "model", value: "\"\(name)\"", section: "[whisper]")
+            ConfigManager.shared.updateConfig(key: "engine", value: "\"whisper\"")
+            ConfigManager.shared.updateConfig(key: "model", value: "\"\(name)\"", section: "[whisper]")
         }
 
         selectedModel = name
@@ -212,51 +285,6 @@ struct ModelsSettingsView: View {
             return String(format: "%.1f GB", mb / 1000)
         }
         return String(format: "%.0f MB", mb)
-    }
-
-    private func readConfig() -> [String: String] {
-        let configPath = NSHomeDirectory() + "/Library/Application Support/voxtype/config.toml"
-        guard let content = try? String(contentsOfFile: configPath, encoding: .utf8) else {
-            return [:]
-        }
-
-        var result: [String: String] = [:]
-        var currentSection = ""
-
-        for line in content.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-
-            if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
-                currentSection = String(trimmed.dropFirst().dropLast())
-            } else if trimmed.contains("=") && !trimmed.hasPrefix("#") {
-                let parts = trimmed.components(separatedBy: "=")
-                if parts.count >= 2 {
-                    let key = parts[0].trimmingCharacters(in: .whitespaces)
-                    let value = parts.dropFirst().joined(separator: "=").trimmingCharacters(in: .whitespaces)
-                    let fullKey = currentSection.isEmpty ? key : "\(currentSection).\(key)"
-                    result[fullKey] = value
-                }
-            }
-        }
-
-        return result
-    }
-
-    private func updateConfig(key: String, value: String, section: String? = nil) {
-        let configPath = NSHomeDirectory() + "/Library/Application Support/voxtype/config.toml"
-        guard var content = try? String(contentsOfFile: configPath, encoding: .utf8) else {
-            return
-        }
-
-        let pattern = "\(key)\\s*=\\s*\"[^\"]*\""
-        let replacement = "\(key) = \(value)"
-
-        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-            let range = NSRange(content.startIndex..., in: content)
-            content = regex.stringByReplacingMatches(in: content, options: [], range: range, withTemplate: replacement)
-        }
-
-        try? content.write(toFile: configPath, atomically: true, encoding: .utf8)
     }
 }
 

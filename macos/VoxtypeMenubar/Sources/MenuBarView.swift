@@ -37,43 +37,41 @@ struct MenuBarView: View {
 
             Divider()
 
-            // Settings submenu
-            Menu("Settings") {
-                Menu("Engine") {
-                    Button("Parakeet (Fast)") {
-                        setEngine("parakeet")
-                    }
-                    Button("Whisper") {
-                        setEngine("whisper")
-                    }
+            // Quick settings menus (at top level)
+            Menu("Engine") {
+                Button("Parakeet (Fast)") {
+                    setEngine("parakeet")
                 }
-
-                Menu("Output Mode") {
-                    Button("Type Text") {
-                        setOutputMode("type")
-                    }
-                    Button("Clipboard") {
-                        setOutputMode("clipboard")
-                    }
-                    Button("Clipboard + Paste") {
-                        setOutputMode("paste")
-                    }
+                Button("Whisper") {
+                    setEngine("whisper")
                 }
+            }
 
-                Menu("Hotkey Mode") {
-                    Button("Push-to-Talk (hold)") {
-                        setHotkeyMode("push_to_talk")
-                    }
-                    Button("Toggle (press)") {
-                        setHotkeyMode("toggle")
-                    }
+            Menu("Output Mode") {
+                Button("Type Text") {
+                    setOutputMode("type")
+                }
+                Button("Clipboard") {
+                    setOutputMode("clipboard")
+                }
+                Button("Clipboard + Paste") {
+                    setOutputMode("paste")
+                }
+            }
+
+            Menu("Hotkey Mode") {
+                Button("Push-to-Talk (hold)") {
+                    setHotkeyMode("push_to_talk")
+                }
+                Button("Toggle (press)") {
+                    setHotkeyMode("toggle")
                 }
             }
 
             Divider()
 
             Button(action: openSettings) {
-                Label("Settings...", systemImage: "gearshape")
+                Label("Settings", systemImage: "gearshape")
             }
 
             Button(action: restartDaemon) {

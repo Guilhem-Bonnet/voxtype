@@ -87,21 +87,30 @@ class VoxtypeStatusMonitor: ObservableObject {
     }
 
     private func isDaemonRunning() -> Bool {
-        let task = Process()
-        task.launchPath = "/bin/launchctl"
-        task.arguments = ["list", "io.voxtype.daemon"]
-
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = pipe
+        // First check if launchd service is running
+        let launchctlTask = Process()
+        launchctlTask.launchPath = "/bin/launchctl"
+        launchctlTask.arguments = ["list", "io.voxtype.daemon"]
+        launchctlTask.standardOutput = FileHandle.nullDevice
+        launchctlTask.standardError = FileHandle.nullDevice
 
         do {
-            try task.run()
-            task.waitUntilExit()
-            return task.terminationStatus == 0
-        } catch {
+            try launchctlTask.run()
+            launchctlTask.waitUntilExit()
+            if launchctlTask.terminationStatus == 0 {
+                return true
+            }
+        } catch {}
+
+        // Fall back to checking if daemon process is running via PID file
+        let pidPath = "/tmp/voxtype/pid"
+        guard let pidString = try? String(contentsOfFile: pidPath, encoding: .utf8),
+              let pid = Int32(pidString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             return false
         }
+
+        // Check if process with this PID exists
+        return kill(pid, 0) == 0
     }
 }
 

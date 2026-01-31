@@ -2,6 +2,8 @@ import SwiftUI
 
 struct AdvancedSettingsView: View {
     @State private var autoStartEnabled: Bool = false
+    @State private var daemonRunning: Bool = false
+    @State private var daemonStatus: String = "Unknown"
 
     var body: some View {
         Form {
@@ -68,14 +70,34 @@ struct AdvancedSettingsView: View {
             }
 
             Section {
-                Button(action: restartDaemon) {
-                    Label("Restart Daemon", systemImage: "arrow.clockwise")
+                HStack {
+                    Circle()
+                        .fill(daemonRunning ? Color.green : Color.red)
+                        .frame(width: 10, height: 10)
+                    Text("Status: \(daemonStatus)")
+
+                    Spacer()
+
+                    Button("Refresh") {
+                        checkDaemonStatus()
+                    }
+                }
+
+                if daemonRunning {
+                    Button(action: restartDaemon) {
+                        Label("Restart Daemon", systemImage: "arrow.clockwise")
+                    }
+                } else {
+                    Button(action: startDaemon) {
+                        Label("Start Daemon", systemImage: "play.fill")
+                    }
                 }
 
                 Button(action: stopDaemon) {
                     Label("Stop Daemon", systemImage: "stop.fill")
                 }
                 .foregroundColor(.red)
+                .disabled(!daemonRunning)
 
                 Button(action: runSetupCheck) {
                     Label("Run Setup Check", systemImage: "checkmark.circle")
@@ -106,6 +128,30 @@ struct AdvancedSettingsView: View {
         .formStyle(.grouped)
         .onAppear {
             checkAutoStartStatus()
+            checkDaemonStatus()
+        }
+    }
+
+    private func checkDaemonStatus() {
+        let result = VoxtypeCLI.run(["status"])
+        let status = result.output.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        if status == "idle" || status == "recording" || status == "transcribing" {
+            daemonRunning = true
+            daemonStatus = status.capitalized
+        } else if status.contains("not running") || status.isEmpty || !result.success {
+            daemonRunning = false
+            daemonStatus = "Not Running"
+        } else {
+            daemonRunning = false
+            daemonStatus = status.capitalized
+        }
+    }
+
+    private func startDaemon() {
+        VoxtypeCLI.run(["daemon"], wait: false)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            checkDaemonStatus()
         }
     }
 
