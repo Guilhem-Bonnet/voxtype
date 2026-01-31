@@ -1,204 +1,105 @@
 # Voxtype macOS Installation Guide
 
-Voxtype is a push-to-talk voice-to-text tool that uses Whisper for fast, local speech recognition.
+Voxtype is a push-to-talk voice-to-text tool with fast, local speech recognition using Parakeet or Whisper.
+
+> **Note:** macOS support is in beta. The binaries are currently unsigned, which requires a few extra steps during installation. Once we have signed and notarized binaries, this process will be simpler.
 
 ## Requirements
 
-- macOS 11 (Big Sur) or later
-- Apple Silicon (M1/M2/M3) or Intel Mac
-- Accessibility permissions for global hotkey detection
+- macOS 13 (Ventura) or later
+- Apple Silicon (M1/M2/M3/M4)
+- Microphone access
+- Input Monitoring permission (for global hotkey)
 
-## Installation
-
-### Option 1: Homebrew (Recommended)
+## Installation via Homebrew (Recommended)
 
 ```bash
 # Add the tap
 brew tap peteonrails/voxtype
 
 # Install
-brew install --cask voxtype
+brew install --cask peteonrails/voxtype/voxtype
 ```
 
-### Option 2: Direct Download
+The Cask automatically:
+- Installs Voxtype.app to /Applications
+- Creates CLI symlink (`voxtype` command)
+- Sets up auto-start at login
+- Starts the daemon
 
-1. Download the latest DMG from [GitHub Releases](https://github.com/peteonrails/voxtype/releases)
-2. Open the DMG and drag `voxtype` to `/usr/local/bin`
+### First-Time Security Setup
 
-```bash
-# Or install via command line
-curl -L https://github.com/peteonrails/voxtype/releases/latest/download/voxtype-macos-universal.dmg -o voxtype.dmg
-hdiutil attach voxtype.dmg
-cp /Volumes/Voxtype/voxtype /usr/local/bin/
-hdiutil detach /Volumes/Voxtype
-rm voxtype.dmg
-```
+Because the app is unsigned, macOS will block it on first run. This is a one-time setup:
 
-### Option 3: Build from Source
+1. **Allow the app to run:**
+   - Open **System Settings** > **Privacy & Security**
+   - Scroll down to find "Voxtype.app was blocked"
+   - Click **Open Anyway**
 
-```bash
-git clone https://github.com/peteonrails/voxtype.git
-cd voxtype
-cargo build --release --features gpu-metal
-cp target/release/voxtype /usr/local/bin/
-```
+2. **Grant Input Monitoring permission (required for hotkey):**
+   - Open **System Settings** > **Privacy & Security** > **Input Monitoring**
+   - Enable **Voxtype**
 
-## Setup
+3. **Restart the daemon** to pick up permissions:
+   ```bash
+   launchctl stop io.voxtype.daemon
+   launchctl start io.voxtype.daemon
+   ```
 
-### 1. Grant Accessibility Permissions
-
-Voxtype needs Accessibility permissions to detect global hotkeys.
-
-1. Open **System Preferences** (or System Settings on macOS 13+)
-2. Go to **Privacy & Security** > **Accessibility**
-3. Click the lock icon to make changes
-4. Add and enable `voxtype` (or Terminal if running from terminal)
-
-### 2. Download a Whisper Model
+### Download a Speech Model
 
 ```bash
-# Interactive model selection
-voxtype setup model
+# Recommended: Parakeet (fast, accurate)
+voxtype setup --download --model parakeet-tdt-0.6b-v3-int8
 
-# Or download a specific model
+# Or use Whisper
 voxtype setup --download --model base.en
-```
-
-Available models:
-- `tiny.en` / `tiny` - Fastest, lowest accuracy (39 MB)
-- `base.en` / `base` - Good balance, recommended (142 MB)
-- `small.en` / `small` - Better accuracy (466 MB)
-- `medium.en` / `medium` - High accuracy (1.5 GB)
-- `large-v3` - Best accuracy (3.1 GB) **Pro only**
-- `large-v3-turbo` - Fast + accurate (1.6 GB) **Pro only**
-
-### 3. Configure Hotkey
-
-Edit `~/.config/voxtype/config.toml`:
-
-```toml
-[hotkey]
-key = "F13"  # Or any key: SCROLLLOCK, PAUSE, etc.
-modifiers = []  # Optional: ["CTRL"], ["CMD"], etc.
-mode = "push_to_talk"  # Or "toggle"
-```
-
-### 4. Start Voxtype
-
-**Manual start:**
-```bash
-voxtype daemon
-```
-
-**Auto-start on login (recommended):**
-```bash
-voxtype setup launchd
 ```
 
 ## Usage
 
-1. Hold the hotkey (default: F13) to record
-2. Speak your text
-3. Release the hotkey to transcribe
-4. Text is typed into the active window
+Hold **Right Option** (⌥) to record, release to transcribe. Text is typed into the active application.
 
-### Quick Reference
+### Quick Commands
 
 ```bash
-voxtype daemon              # Start the daemon
-voxtype status              # Check if daemon is running
-voxtype setup model         # Download/switch models
-voxtype setup launchd       # Install as LaunchAgent
-voxtype check-update        # Check for updates
-voxtype --help              # Show all options
+voxtype status              # Check daemon status
+voxtype record start        # Start recording manually
+voxtype record stop         # Stop and transcribe
+voxtype setup check         # Verify setup
+voxtype menubar             # Show menu bar status icon
 ```
 
-## Troubleshooting
+### Menu Bar Icon (Optional)
 
-### "Accessibility permissions required"
-
-1. Check System Preferences > Privacy & Security > Accessibility
-2. Ensure voxtype (or Terminal) is added and enabled
-3. Try removing and re-adding the app
-
-### Hotkey not working
-
-1. Check that the hotkey isn't used by another app
-2. Try a different key (F13, SCROLLLOCK, PAUSE are good choices)
-3. Ensure Accessibility permissions are granted
-
-### "Model not found"
+For a status icon showing recording state:
 
 ```bash
-voxtype setup model  # Download a model
+voxtype menubar
 ```
 
-### Daemon not starting
-
-```bash
-# Check logs
-tail -f ~/Library/Logs/voxtype/stderr.log
-
-# Verify permissions
-ls -la /usr/local/bin/voxtype
-```
-
-### LaunchAgent issues
-
-```bash
-# Check status
-launchctl list | grep voxtype
-
-# View logs
-tail -f ~/Library/Logs/voxtype/stdout.log
-
-# Reload service
-launchctl unload ~/Library/LaunchAgents/io.voxtype.daemon.plist
-launchctl load ~/Library/LaunchAgents/io.voxtype.daemon.plist
-```
-
-## Uninstalling
-
-### Homebrew
-
-```bash
-brew uninstall --cask voxtype
-```
-
-### Manual
-
-```bash
-# Stop and remove LaunchAgent
-launchctl unload ~/Library/LaunchAgents/io.voxtype.daemon.plist
-rm ~/Library/LaunchAgents/io.voxtype.daemon.plist
-
-# Remove binary
-rm /usr/local/bin/voxtype
-
-# Remove config and data (optional)
-rm -rf ~/.config/voxtype
-rm -rf ~/.local/share/voxtype
-rm -rf ~/Library/Logs/voxtype
-```
+This shows:
+- 🎙️ Ready (idle)
+- 🔴 Recording
+- ⏳ Transcribing
 
 ## Configuration
 
-Config file: `~/.config/voxtype/config.toml`
+Config file: `~/Library/Application Support/voxtype/config.toml`
 
 ```toml
+# Transcription engine
+engine = "parakeet"  # or "whisper"
+
 [hotkey]
-key = "F13"
-modifiers = []
+key = "RIGHTALT"     # Right Option key
 mode = "push_to_talk"  # or "toggle"
 
-[audio]
-device = "default"
-sample_rate = 16000
-max_duration_secs = 60
+[parakeet]
+model = "parakeet-tdt-0.6b-v3-int8"
 
 [whisper]
 model = "base.en"
-language = "en"
 
 [output]
 mode = "type"  # or "clipboard", "paste"
@@ -206,8 +107,83 @@ mode = "type"  # or "clipboard", "paste"
 
 See [CONFIGURATION.md](CONFIGURATION.md) for full options.
 
+## Troubleshooting
+
+### Hotkey not working
+
+1. Verify Input Monitoring permission is granted:
+   - System Settings > Privacy & Security > Input Monitoring
+   - Voxtype must be enabled
+
+2. Restart the daemon:
+   ```bash
+   launchctl stop io.voxtype.daemon
+   launchctl start io.voxtype.daemon
+   ```
+
+3. Check daemon logs:
+   ```bash
+   tail -f ~/Library/Logs/voxtype/stdout.log
+   ```
+
+### "Voxtype was blocked" / "damaged app"
+
+This happens because the app is unsigned. Go to System Settings > Privacy & Security and click "Open Anyway".
+
+### Model not found
+
+```bash
+voxtype setup --download --model parakeet-tdt-0.6b-v3-int8
+```
+
+### Daemon not starting
+
+```bash
+# Check status
+launchctl list | grep voxtype
+
+# View logs
+tail -f ~/Library/Logs/voxtype/stderr.log
+
+# Manual start for debugging
+voxtype daemon
+```
+
+### "Another instance is already running"
+
+```bash
+# Clean up stale state
+pkill -9 voxtype
+rm -rf /tmp/voxtype
+launchctl start io.voxtype.daemon
+```
+
+## Uninstalling
+
+```bash
+brew uninstall --cask voxtype
+```
+
+This removes:
+- Voxtype.app from /Applications
+- LaunchAgent (auto-start)
+- CLI symlink
+
+To also remove data:
+```bash
+rm -rf ~/Library/Application\ Support/voxtype
+rm -rf ~/Library/Logs/voxtype
+```
+
+## Building from Source
+
+```bash
+git clone https://github.com/peteonrails/voxtype.git
+cd voxtype
+cargo build --release --features parakeet
+```
+
 ## Getting Help
 
 - GitHub Issues: https://github.com/peteonrails/voxtype/issues
-- Documentation: https://voxtype.io/docs
-- Email: support@voxtype.io
+- Documentation: https://voxtype.io
