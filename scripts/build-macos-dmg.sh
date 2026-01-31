@@ -2,12 +2,18 @@
 #
 # Create a DMG installer for macOS
 #
+# This script builds a complete Voxtype.app bundle containing:
+#   - voxtype CLI binary
+#   - VoxtypeMenubar.app (menu bar status icon)
+#   - VoxtypeSetup.app (settings UI)
+#   - Engine notification icons
+#
 # Requires:
-#   - Universal binary already built and signed
-#   - create-dmg tool (brew install create-dmg)
+#   - voxtype binary already built (arm64 or universal)
+#   - Swift apps will be built automatically
 #
 # Usage:
-#   ./scripts/build-macos-dmg.sh 0.5.0
+#   ./scripts/build-macos-dmg.sh 0.6.0-rc1
 
 set -euo pipefail
 
@@ -15,7 +21,7 @@ VERSION="${1:-}"
 
 if [[ -z "$VERSION" ]]; then
     echo "Usage: $0 VERSION"
-    echo "Example: $0 0.5.0"
+    echo "Example: $0 0.6.0-rc1"
     exit 1
 fi
 
@@ -25,76 +31,126 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-BINARY="releases/${VERSION}/voxtype-${VERSION}-macos-universal"
-DMG_PATH="releases/${VERSION}/voxtype-${VERSION}-macos-universal.dmg"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+RELEASES_DIR="${PROJECT_DIR}/releases/${VERSION}"
+APP_DIR="${RELEASES_DIR}/Voxtype.app"
 
-if [[ ! -f "$BINARY" ]]; then
-    echo -e "${RED}Error: Binary not found: $BINARY${NC}"
-    echo "Run ./scripts/build-macos.sh $VERSION first"
+# Find the binary (try arm64 first, then universal)
+if [[ -f "${RELEASES_DIR}/voxtype-${VERSION}-macos-arm64" ]]; then
+    BINARY="${RELEASES_DIR}/voxtype-${VERSION}-macos-arm64"
+    DMG_PATH="${RELEASES_DIR}/Voxtype-${VERSION}-macos-arm64.dmg"
+elif [[ -f "${RELEASES_DIR}/voxtype-${VERSION}-macos-universal" ]]; then
+    BINARY="${RELEASES_DIR}/voxtype-${VERSION}-macos-universal"
+    DMG_PATH="${RELEASES_DIR}/Voxtype-${VERSION}-macos-universal.dmg"
+else
+    echo -e "${RED}Error: No binary found in ${RELEASES_DIR}${NC}"
+    echo "Expected: voxtype-${VERSION}-macos-arm64 or voxtype-${VERSION}-macos-universal"
     exit 1
 fi
 
-echo -e "${GREEN}Creating DMG for voxtype ${VERSION}...${NC}"
+echo -e "${GREEN}Building Voxtype.app for ${VERSION}...${NC}"
 echo "Binary: $BINARY"
 echo
 
-# Check for create-dmg
-if ! command -v create-dmg &> /dev/null; then
-    echo -e "${YELLOW}Installing create-dmg...${NC}"
-    brew install create-dmg
+# Build Swift apps
+echo -e "${YELLOW}Building VoxtypeMenubar...${NC}"
+cd "${PROJECT_DIR}/macos/VoxtypeMenubar"
+./build-app.sh > /dev/null 2>&1
+MENUBAR_APP="${PROJECT_DIR}/macos/VoxtypeMenubar/.build/VoxtypeMenubar.app"
+
+echo -e "${YELLOW}Building VoxtypeSetup...${NC}"
+cd "${PROJECT_DIR}/macos/VoxtypeSetup"
+./build-app.sh > /dev/null 2>&1
+SETUP_APP="${PROJECT_DIR}/macos/VoxtypeSetup/.build/VoxtypeSetup.app"
+
+# Verify Swift apps exist
+if [[ ! -d "$MENUBAR_APP" ]]; then
+    echo -e "${RED}Error: VoxtypeMenubar.app not found${NC}"
+    exit 1
 fi
 
-# Create temporary directory for DMG contents
-TEMP_DIR=$(mktemp -d)
-trap "rm -rf $TEMP_DIR" EXIT
+if [[ ! -d "$SETUP_APP" ]]; then
+    echo -e "${RED}Error: VoxtypeSetup.app not found${NC}"
+    exit 1
+fi
 
-# Copy binary
-cp "$BINARY" "$TEMP_DIR/voxtype"
-chmod +x "$TEMP_DIR/voxtype"
+# Create app bundle structure
+echo -e "${YELLOW}Creating Voxtype.app bundle...${NC}"
+rm -rf "$APP_DIR"
+mkdir -p "$APP_DIR/Contents/MacOS"
+mkdir -p "$APP_DIR/Contents/Resources"
 
-# Create README
-cat > "$TEMP_DIR/README.txt" << 'EOF'
-Voxtype - Push-to-talk voice-to-text for macOS
+# Copy the main voxtype binary
+cp "$BINARY" "$APP_DIR/Contents/MacOS/voxtype"
+chmod +x "$APP_DIR/Contents/MacOS/voxtype"
 
-Installation:
-  1. Drag 'voxtype' to /usr/local/bin or your preferred location
-  2. Grant Accessibility permissions when prompted
-  3. Run: voxtype setup launchd
+# Copy VoxtypeMenubar.app
+cp -R "$MENUBAR_APP" "$APP_DIR/Contents/MacOS/"
 
-Quick Start:
-  voxtype daemon          - Start the daemon
-  voxtype setup launchd   - Install as LaunchAgent (auto-start)
-  voxtype setup model     - Download/select Whisper model
-  voxtype --help          - Show all options
+# Copy VoxtypeSetup.app
+cp -R "$SETUP_APP" "$APP_DIR/Contents/MacOS/"
 
-For more information, visit: https://voxtype.io
+# Copy engine icons for notifications
+if [[ -f "${PROJECT_DIR}/assets/engines/parakeet.png" ]]; then
+    cp "${PROJECT_DIR}/assets/engines/parakeet.png" "$APP_DIR/Contents/Resources/"
+fi
+if [[ -f "${PROJECT_DIR}/assets/engines/whisper.png" ]]; then
+    cp "${PROJECT_DIR}/assets/engines/whisper.png" "$APP_DIR/Contents/Resources/"
+fi
+
+# Copy app icon if it exists
+if [[ -f "${PROJECT_DIR}/assets/icon.icns" ]]; then
+    cp "${PROJECT_DIR}/assets/icon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
+fi
+
+# Create Info.plist
+cat > "$APP_DIR/Contents/Info.plist" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>voxtype</string>
+    <key>CFBundleIdentifier</key>
+    <string>io.voxtype.app</string>
+    <key>CFBundleName</key>
+    <string>Voxtype</string>
+    <key>CFBundleDisplayName</key>
+    <string>Voxtype</string>
+    <key>CFBundleVersion</key>
+    <string>${VERSION}</string>
+    <key>CFBundleShortVersionString</key>
+    <string>${VERSION}</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Voxtype needs microphone access to record your voice for transcription.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Voxtype uses AppleScript to type transcribed text into applications.</string>
+</dict>
+</plist>
 EOF
 
-# Remove existing DMG if present
-rm -f "$DMG_PATH"
+echo -e "${GREEN}App bundle created:${NC}"
+echo "  $APP_DIR"
+du -sh "$APP_DIR"
+echo
 
 # Create DMG
 echo -e "${YELLOW}Creating DMG...${NC}"
-create-dmg \
-    --volname "Voxtype $VERSION" \
-    --volicon "packaging/macos/icon.icns" \
-    --background "packaging/macos/dmg-background.png" \
-    --window-pos 200 120 \
-    --window-size 600 400 \
-    --icon-size 100 \
-    --icon "voxtype" 175 190 \
-    --icon "README.txt" 425 190 \
-    --hide-extension "voxtype" \
-    --app-drop-link 425 190 \
-    "$DMG_PATH" \
-    "$TEMP_DIR" 2>/dev/null || {
-        # If create-dmg fails (e.g., missing background), create simple DMG
-        echo -e "${YELLOW}Creating simple DMG (no custom background)...${NC}"
-        hdiutil create -volname "Voxtype $VERSION" \
-            -srcfolder "$TEMP_DIR" \
-            -ov -format UDZO \
-            "$DMG_PATH"
-    }
+rm -f "$DMG_PATH"
+
+hdiutil create -volname "Voxtype ${VERSION}" \
+    -srcfolder "$APP_DIR" \
+    -ov -format UDZO \
+    "$DMG_PATH"
 
 # Get DMG size
 SIZE=$(du -h "$DMG_PATH" | cut -f1)
@@ -109,8 +165,12 @@ echo
 echo "SHA256 checksum:"
 shasum -a 256 "$DMG_PATH"
 
+# Update the checksum file
+CHECKSUM=$(shasum -a 256 "$DMG_PATH" | cut -d' ' -f1)
+echo "${CHECKSUM}  $(basename "$DMG_PATH")" > "${RELEASES_DIR}/macos-SHA256SUMS.txt"
+
 echo
 echo "Next steps:"
-echo "  1. Test the DMG by mounting it"
-echo "  2. Upload to GitHub release"
-echo "  3. Update Homebrew cask formula"
+echo "  1. Test the DMG: open '$DMG_PATH'"
+echo "  2. Update Homebrew cask with new SHA256: $CHECKSUM"
+echo "  3. Upload to GitHub release"

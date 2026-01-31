@@ -1,8 +1,8 @@
 cask "voxtype" do
   version "0.6.0-rc1"
-  sha256 "ad5c4f2531ed50ed028ec7e85062abeb2e64c27e8d1becb84b4946b631ba7aeb"
+  sha256 "b98f426c74f35cc769191ad9c427078f64695017a0273bf323b259488962bb30"
 
-  url "https://github.com/peteonrails/voxtype/releases/download/v#{version}/Voxtype-#{version}-macos-arm64.dmg"
+  url "file:///Users/pete/workspace/voxtype/releases/0.6.0-rc1/Voxtype-0.6.0-rc1-macos-arm64.dmg"
   name "Voxtype"
   desc "Push-to-talk voice-to-text for macOS"
   homepage "https://voxtype.io"
@@ -80,8 +80,17 @@ cask "voxtype" do
 
     File.write(plist_path, plist_content)
 
-    # Load the LaunchAgent
+    # Run initial setup to create config and download model
+    # This is non-interactive and downloads the smallest fast model
+    system_command "/Applications/Voxtype.app/Contents/MacOS/voxtype",
+      args: ["setup", "--download", "--model", "parakeet-tdt-0.6b-v3-int8"],
+      print_stdout: true
+
+    # Now load the LaunchAgent (after setup is complete)
     system_command "/bin/launchctl", args: ["load", plist_path]
+
+    # Launch the menubar app
+    system_command "/usr/bin/open", args: ["/Applications/Voxtype.app/Contents/MacOS/VoxtypeMenubar.app"]
   end
 
   uninstall_postflight do
@@ -103,21 +112,20 @@ cask "voxtype" do
   ]
 
   caveats <<~EOS
-    Voxtype is installed and will start automatically at login.
+    Voxtype is installed and running!
 
-    First-time setup:
+    The Parakeet speech model was downloaded automatically.
+    Look for the microphone icon in your menu bar.
 
-    1. If prompted "Voxtype was blocked", go to System Settings >
-       Privacy & Security and click "Open Anyway"
+    If prompted "Voxtype was blocked", go to:
+      System Settings > Privacy & Security > click "Open Anyway"
 
-    2. Download a speech model:
-       voxtype setup --download --model parakeet-tdt-0.6b-v3-int8
-
-    3. Grant Input Monitoring permission in System Settings >
-       Privacy & Security > Input Monitoring (required for hotkey)
+    To use hotkeys, grant Input Monitoring permission:
+      System Settings > Privacy & Security > Input Monitoring
 
     Default hotkey: Right Option (hold to record, release to transcribe)
 
-    For menu bar status icon: voxtype menubar
+    Settings: Click menu bar icon > Settings
+    CLI help:  voxtype --help
   EOS
 end
