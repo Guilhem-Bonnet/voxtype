@@ -1,10 +1,12 @@
 import SwiftUI
+import AppKit
 
 struct GeneralSettingsView: View {
     @State private var selectedEngine: String = "parakeet"
     @State private var hotkeyMode: String = "push_to_talk"
     @State private var hotkey: String = "RIGHTALT"
     @State private var daemonRunning: Bool = false
+    @State private var menubarRunning: Bool = false
     @State private var needsRestart: Bool = false
 
     var body: some View {
@@ -90,11 +92,29 @@ struct GeneralSettingsView: View {
             } header: {
                 Text("Daemon Status")
             }
+
+            Section {
+                Toggle("Show in Menu Bar", isOn: $menubarRunning)
+                    .onChange(of: menubarRunning) { newValue in
+                        if newValue {
+                            launchMenubar()
+                        } else {
+                            quitMenubar()
+                        }
+                    }
+
+                Text("Display a status icon in the menu bar for quick access.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } header: {
+                Text("Menu Bar")
+            }
         }
         .formStyle(.grouped)
         .onAppear {
             loadSettings()
             checkDaemonStatus()
+            checkMenubarStatus()
         }
     }
 
@@ -131,5 +151,33 @@ struct GeneralSettingsView: View {
                 self.checkDaemonStatus()
             }
         }
+    }
+
+    private func checkMenubarStatus() {
+        let task = Process()
+        task.launchPath = "/usr/bin/pgrep"
+        task.arguments = ["-x", "VoxtypeMenubar"]
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        try? task.run()
+        task.waitUntilExit()
+        menubarRunning = (task.terminationStatus == 0)
+    }
+
+    private func launchMenubar() {
+        let menubarPath = "/Applications/Voxtype.app/Contents/MacOS/VoxtypeMenubar.app"
+        if FileManager.default.fileExists(atPath: menubarPath) {
+            NSWorkspace.shared.open(URL(fileURLWithPath: menubarPath))
+        }
+    }
+
+    private func quitMenubar() {
+        let task = Process()
+        task.launchPath = "/usr/bin/pkill"
+        task.arguments = ["-x", "VoxtypeMenubar"]
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        try? task.run()
+        task.waitUntilExit()
     }
 }
