@@ -63,6 +63,7 @@ export default defineConfig({
           items: [
             { text: "Model Selection", link: "/MODEL_SELECTION_GUIDE" },
             { text: "Waybar Integration", link: "/WAYBAR" },
+            { text: "GUI (Desktop)", link: "/GUI" },
             { text: "Parakeet ASR", link: "/PARAKEET" },
             { text: "CI Setup", link: "/CI-SETUP" },
           ],

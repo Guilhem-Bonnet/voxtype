@@ -23,6 +23,7 @@ Voxtype is a push-to-talk voice-to-text tool for Linux. Optimized for Wayland, w
 - [Tips & Best Practices](#tips--best-practices)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Integration Examples](#integration-examples)
+- [Graphical Interface (GUI)](#graphical-interface-gui)
 
 ---
 
@@ -1671,9 +1672,23 @@ We want to hear from you! Voxtype is a young project and your feedback helps mak
 
 ---
 
+## Graphical Interface (GUI)
+
+Voxtype includes an optional GTK4/libadwaita GUI with a system tray icon, recording overlay, and settings window. Build with `--features gui` and launch with:
+
+```bash
+voxtype ui            # Start tray icon and overlay monitor
+voxtype ui --settings # Open settings window directly
+```
+
+> **For complete details, see [GUI.md](GUI.md).**
+
+---
+
 ## Next Steps
 
 - [Configuration Reference](CONFIGURATION.md) - Detailed config options
 - [Waybar Integration](WAYBAR.md) - Status bar indicator setup
+- [GUI Guide](GUI.md) - System tray, overlay, and settings window
 - [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues and solutions
 - [FAQ](FAQ.md) - Frequently asked questions
