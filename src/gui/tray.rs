@@ -7,14 +7,13 @@
 //! # Architecture
 //!
 //! The tray runs on a dedicated thread with its own tokio runtime, independently
-//! of the GTK4 main loop. It monitors daemon state by reading the state file
-//! directly via `voxtype status --follow --format json` subprocess.
+//! of the GTK4 main loop. It monitors daemon state via the shared status bus
+//! (`status_bus` module) which provides a single `voxtype status --follow` subprocess.
 //!
 //! [StatusNotifierItem]: https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/
 
 use ksni::menu::{MenuItem, StandardItem};
 use ksni::{ToolTip, TrayMethods};
-use std::io::BufRead;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -121,12 +120,15 @@ impl ksni::Tray for VoxtypeTray {
 
     fn activate(&mut self, _x: i32, _y: i32) {
         // Left-click on tray icon → toggle recording (primary action)
-        let _ = Command::new("voxtype")
+        if let Err(e) = Command::new("voxtype")
             .args(["record", "toggle"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .spawn();
+            .spawn()
+        {
+            tracing::warn!("Failed to toggle recording: {e}");
+        }
     }
 
     fn tool_tip(&self) -> ToolTip {
@@ -269,7 +271,7 @@ impl ksni::Tray for VoxtypeTray {
 /// # Panics
 ///
 /// Panics if the tokio runtime cannot be created.
-pub fn start_tray(app: &libadwaita::Application) {
+pub fn start_tray(app: &libadwaita::Application, status_rx: std::sync::mpsc::Receiver<String>) {
     use gtk4::prelude::*;
     let app_clone = app.clone();
 
@@ -316,8 +318,8 @@ pub fn start_tray(app: &libadwaita::Application) {
                 let update_handle = handle.clone();
                 tokio::spawn(check_for_updates_periodic(update_handle));
 
-                // Monitor daemon state and update tray
-                monitor_state(handle).await;
+                // Monitor daemon state via shared status bus
+                monitor_state(handle, status_rx).await;
             });
         })
         .expect("failed to spawn tray thread");
@@ -363,81 +365,45 @@ async fn check_for_updates_periodic(handle: ksni::Handle<VoxtypeTray>) {
     }
 }
 
-/// Monitor daemon state via `voxtype status --follow --format json` and update
-/// the tray icon accordingly.
+/// Monitor daemon state using the shared status bus receiver.
 ///
-/// Uses `spawn_blocking` for the synchronous reader to avoid blocking the
-/// tokio runtime that ksni/zbus needs for D-Bus request processing.
-async fn monitor_state(handle: ksni::Handle<VoxtypeTray>) {
-    loop {
-        // Spawn the status follower process
-        let child = Command::new("voxtype")
-            .args(["status", "--follow", "--format", "json"])
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn();
+/// Bridges the `std::sync::mpsc::Receiver` into the tokio async world
+/// via `spawn_blocking`, then processes lines asynchronously.
+async fn monitor_state(
+    handle: ksni::Handle<VoxtypeTray>,
+    status_rx: std::sync::mpsc::Receiver<String>,
+) {
+    // Bridge std::sync::mpsc → tokio::sync::mpsc so we don't block the runtime
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(32);
 
-        let child = match child {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::warn!("Failed to spawn status monitor for tray: {e}");
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                continue;
-            }
-        };
-
-        let stdout = match child.stdout {
-            Some(s) => s,
-            None => {
-                tracing::warn!("No stdout from status monitor");
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                continue;
-            }
-        };
-
-        // Read lines in a blocking task so the tokio runtime stays free
-        // for ksni/zbus to handle D-Bus requests (menu, activate, etc.)
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(32);
-
-        tokio::task::spawn_blocking(move || {
-            let reader = std::io::BufReader::new(stdout);
-            for line in reader.lines() {
-                match line {
-                    Ok(l) => {
-                        if tx.blocking_send(l).is_err() {
-                            break; // Receiver dropped
-                        }
-                    }
-                    Err(_) => break, // Process ended or pipe broken
-                }
-            }
-        });
-
-        // Process lines asynchronously — doesn't block the runtime
-        while let Some(line) = rx.recv().await {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
-                if let Some(class) = json.get("class").and_then(|v| v.as_str()) {
-                    let new_state = TrayState::from_class(class);
-                    handle
-                        .update(move |tray: &mut VoxtypeTray| {
-                            if tray.state != new_state {
-                                tray.state = new_state.clone();
-                            }
-                        })
-                        .await;
-                }
+    tokio::task::spawn_blocking(move || {
+        for line in status_rx.iter() {
+            if tx.blocking_send(line).is_err() {
+                break; // Receiver dropped
             }
         }
+    });
 
-        // Process ended — daemon probably stopped
-        handle
-            .update(|tray: &mut VoxtypeTray| {
-                tray.state = TrayState::Stopped;
-            })
-            .await;
-
-        // Wait before reconnecting
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    // Process lines asynchronously — doesn't block the runtime
+    while let Some(line) = rx.recv().await {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+            if let Some(class) = json.get("class").and_then(|v| v.as_str()) {
+                let new_state = TrayState::from_class(class);
+                handle
+                    .update(move |tray: &mut VoxtypeTray| {
+                        if tray.state != new_state {
+                            tray.state = new_state.clone();
+                        }
+                    })
+                    .await;
+            }
+        }
     }
+
+    // Bus ended — set stopped state
+    handle
+        .update(|tray: &mut VoxtypeTray| {
+            tray.state = TrayState::Stopped;
+        })
+        .await;
 }

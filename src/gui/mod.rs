@@ -12,7 +12,8 @@
 //!
 //! The GUI runs as a GTK4/libadwaita application launched via `voxtype ui`.
 //! It communicates with the daemon by:
-//! - Reading status via `voxtype status --follow --format json` (stdout JSON stream)
+//! - Reading status via a shared `voxtype status --follow --format json` subprocess
+//!   (status_bus module fans out to overlay + tray)
 //! - Sending commands via `voxtype record start/stop/toggle/cancel` (CLI invocation)
 //!
 //! The system tray runs on a separate thread with its own tokio runtime,
@@ -22,6 +23,7 @@
 
 pub mod overlay;
 pub mod settings;
+pub mod status_bus;
 pub mod tray;
 pub mod update;
 
@@ -38,11 +40,8 @@ const APP_ID: &str = "io.github.voxtype.Voxtype";
 /// Whether to open the settings window on activation.
 static OPEN_SETTINGS: AtomicBool = AtomicBool::new(false);
 
-/// Guard to prevent starting the tray icon more than once.
-static TRAY_STARTED: AtomicBool = AtomicBool::new(false);
-
-/// Guard to prevent starting the overlay monitor more than once.
-static OVERLAY_STARTED: AtomicBool = AtomicBool::new(false);
+/// Guard for the shared status bus (tray + overlay).
+static STATUS_BUS_STARTED: AtomicBool = AtomicBool::new(false);
 
 // Hold guard storage — kept alive for the app lifetime, released on quit.
 // thread_local because ApplicationHoldGuard is not Sync, but GTK callbacks
@@ -117,26 +116,27 @@ fn on_activate(app: &adw::Application) {
         return;
     }
 
-    // Start system tray icon on a dedicated thread (StatusNotifierItem via D-Bus)
-    // Guard against starting it twice (on_activate is called again on re-activation)
-    if !TRAY_STARTED.swap(true, Ordering::SeqCst) {
-        tray::start_tray(app);
+    // Start shared status bus + tray + overlay (once only).
+    // The bus spawns ONE `voxtype status --follow` subprocess and fans out
+    // JSON lines to both the overlay and the tray via mpsc channels.
+    if !STATUS_BUS_STARTED.swap(true, Ordering::SeqCst) {
+        let (rx_overlay, rx_tray) = status_bus::start();
+
+        // Start system tray icon on a dedicated thread (StatusNotifierItem via D-Bus)
+        tray::start_tray(app, rx_tray);
+
+        // Start overlay monitor on the GLib main loop
+        let app_clone = app.clone();
+        gtk4::glib::spawn_future_local(async move {
+            if let Err(e) = overlay::start_status_monitor(app_clone, rx_overlay).await {
+                tracing::error!("Status monitor error: {}", e);
+            }
+        });
     }
 
     // Open settings window if requested (via --settings flag or re-activation)
     if OPEN_SETTINGS.load(Ordering::SeqCst) {
         settings::show_settings(app);
         OPEN_SETTINGS.store(false, Ordering::SeqCst);
-    }
-
-    // Start monitoring daemon status in background (only once)
-    // The overlay creates its own window and manages visibility based on state
-    if !OVERLAY_STARTED.swap(true, Ordering::SeqCst) {
-        let app_clone = app.clone();
-        gtk4::glib::spawn_future_local(async move {
-            if let Err(e) = overlay::start_status_monitor(app_clone).await {
-                tracing::error!("Status monitor error: {}", e);
-            }
-        });
     }
 }

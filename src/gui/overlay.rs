@@ -15,7 +15,7 @@
 //! # Communication
 //!
 //! The overlay communicates with the daemon via:
-//! - `voxtype status --follow --format json` (reads state + level)
+//! - Shared status bus (`status_bus` module) reading `voxtype status --follow --format json`
 //! - `voxtype record cancel` (cancel action)
 //!
 //! No new IPC mechanism is introduced.
@@ -25,6 +25,7 @@ use gtk4::prelude::*;
 use gtk4::glib;
 use libadwaita as adw;
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -49,7 +50,7 @@ pub struct OverlayData {
     pub state: OverlayState,
     pub level: f32,
     pub recording_start: Option<Instant>,
-    pub levels_history: Vec<f32>,
+    pub levels_history: VecDeque<f32>,
 }
 
 impl Default for OverlayData {
@@ -58,7 +59,7 @@ impl Default for OverlayData {
             state: OverlayState::Hidden,
             level: 0.0,
             recording_start: None,
-            levels_history: vec![0.0; WAVEFORM_BARS],
+            levels_history: VecDeque::from(vec![0.0; WAVEFORM_BARS]),
         }
     }
 }
@@ -193,20 +194,24 @@ impl Overlay {
         window.set_visible(false);
 
         // Set up periodic refresh timer for waveform and timer
-        let waveform_clone = waveform.clone();
-        let timer_label_clone = timer_label.clone();
+        // Only redraws when overlay is visible (Recording state)
+        let waveform_weak = waveform.downgrade();
+        let timer_label_weak = timer_label.downgrade();
         let data_refresh = data.clone();
         glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
+            // Stop if widgets destroyed
+            let Some(wf) = waveform_weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
             let d = data_refresh.borrow();
             if d.state == OverlayState::Recording {
-                // Trigger waveform redraw
-                waveform_clone.queue_draw();
-
-                // Update timer
+                wf.queue_draw();
                 if let Some(start) = d.recording_start {
-                    let elapsed = start.elapsed();
-                    let secs = elapsed.as_secs();
-                    timer_label_clone.set_label(&format!("{:02}:{:02}", secs / 60, secs % 60));
+                    if let Some(tl) = timer_label_weak.upgrade() {
+                        let elapsed = start.elapsed();
+                        let secs = elapsed.as_secs();
+                        tl.set_label(&format!("{:02}:{:02}", secs / 60, secs % 60));
+                    }
                 }
             }
             glib::ControlFlow::Continue
@@ -227,7 +232,7 @@ impl Overlay {
             let mut d = self.data.borrow_mut();
             d.state = OverlayState::Recording;
             d.recording_start = Some(Instant::now());
-            d.levels_history = vec![0.0; WAVEFORM_BARS];
+            d.levels_history = VecDeque::from(vec![0.0; WAVEFORM_BARS]);
         }
         self.status_label.set_visible(false);
         self.timer_label.set_visible(true);
@@ -289,9 +294,9 @@ impl Overlay {
     pub fn update_level(&self, level: f32) {
         let mut d = self.data.borrow_mut();
         d.level = level;
-        d.levels_history.push(level);
-        if d.levels_history.len() > WAVEFORM_BARS {
-            d.levels_history.remove(0);
+        d.levels_history.push_back(level);
+        while d.levels_history.len() > WAVEFORM_BARS {
+            d.levels_history.pop_front();
         }
     }
 }
@@ -311,10 +316,9 @@ fn draw_waveform(cr: &gtk4::cairo::Context, width: i32, height: i32, data: &Rc<R
     let max_bar_height = h * 0.85;
     let center_y = h / 2.0;
 
-    // Accent color based on state
     let (r, g, b) = match d.state {
-        OverlayState::Recording => (0.35, 0.65, 1.0),    // Blue accent
-        OverlayState::Transcribing => (0.6, 0.6, 0.6),   // Grey (frozen)
+        OverlayState::Recording => (0.35, 0.65, 1.0),
+        OverlayState::Transcribing => (0.6, 0.6, 0.6),
         _ => (0.4, 0.4, 0.4),
     };
 
@@ -339,62 +343,15 @@ fn draw_waveform(cr: &gtk4::cairo::Context, width: i32, height: i32, data: &Rc<R
     }
 }
 
-/// Start monitoring daemon status via `voxtype status --follow --format json`.
+/// Start monitoring daemon status using a shared status bus receiver.
 ///
-/// This spawns the status command and parses each JSON line to update
-/// the overlay visibility and waveform.
-pub async fn start_status_monitor(app: adw::Application) -> Result<()> {
-    use std::process::{Command, Stdio};
-    use std::io::BufRead;
-
+/// The subprocess is managed centrally by `status_bus::start()`.
+/// This function only consumes JSON lines and updates the overlay.
+pub async fn start_status_monitor(
+    app: adw::Application,
+    rx: std::sync::mpsc::Receiver<String>,
+) -> Result<()> {
     let overlay = Rc::new(Overlay::new(&app));
-
-    // Spawn `voxtype status --follow --format json` in a background thread
-    // and send parsed lines back to the GLib main loop
-    let (tx, rx) = std::sync::mpsc::channel::<String>();
-
-    std::thread::Builder::new()
-        .name("overlay-status".into())
-        .spawn(move || {
-            loop {
-                let child = Command::new("voxtype")
-                    .args(["status", "--follow", "--format", "json"])
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::null())
-                    .spawn();
-
-                let child = match child {
-                    Ok(c) => c,
-                    Err(_) => {
-                        std::thread::sleep(std::time::Duration::from_secs(5));
-                        continue;
-                    }
-                };
-
-                let stdout = match child.stdout {
-                    Some(s) => s,
-                    None => {
-                        std::thread::sleep(std::time::Duration::from_secs(5));
-                        continue;
-                    }
-                };
-
-                let reader = std::io::BufReader::new(stdout);
-                for line in reader.lines() {
-                    match line {
-                        Ok(l) => {
-                            if tx.send(l).is_err() {
-                                return; // Receiver dropped, app shutting down
-                            }
-                        }
-                        Err(_) => break, // Process died, restart loop
-                    }
-                }
-
-                // Process ended — wait and retry
-                std::thread::sleep(std::time::Duration::from_secs(2));
-            }
-        })?;
 
     // Poll the channel from the GLib main loop
     let overlay_ref = overlay.clone();

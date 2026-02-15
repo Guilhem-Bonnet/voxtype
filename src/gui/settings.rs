@@ -24,13 +24,81 @@ use std::cell::RefCell;
 use std::process::Command;
 use std::rc::Rc;
 
-/// Path to the user config file
-const CONFIG_PATH: &str = "/.config/voxtype/config.toml";
+/// Resolve the user config file path via XDG_CONFIG_HOME (with $HOME fallback).
+fn config_path() -> String {
+    if let Some(dirs) = directories::ProjectDirs::from("", "", "voxtype") {
+        dirs.config_dir().join("config.toml").to_string_lossy().to_string()
+    } else {
+        format!("{}/.config/voxtype/config.toml", std::env::var("HOME").unwrap_or_default())
+    }
+}
+
+/// Helper: restart the voxtype systemd user service with visual feedback on the button.
+fn restart_service_button(btn: &gtk4::Button) {
+    btn.set_sensitive(false);
+    btn.set_label("Redémarrage…");
+
+    let (tx, rx) = std::sync::mpsc::channel::<bool>();
+    std::thread::spawn(move || {
+        let ok = Command::new("systemctl")
+            .args(["--user", "restart", "voxtype"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        let _ = tx.send(ok);
+    });
+
+    let btn_weak = btn.downgrade();
+    fn poll_restart(
+        rx: std::sync::mpsc::Receiver<bool>,
+        btn_weak: gtk4::glib::WeakRef<gtk4::Button>,
+    ) {
+        match rx.try_recv() {
+            Ok(ok) => {
+                if let Some(b) = btn_weak.upgrade() {
+                    if ok {
+                        b.set_label("✓ Redémarré");
+                    } else {
+                        b.set_label("✗ Échec");
+                        b.add_css_class("error");
+                    }
+                    b.set_sensitive(true);
+                    let btn_w2 = b.downgrade();
+                    gtk4::glib::timeout_add_local_once(
+                        std::time::Duration::from_secs(3),
+                        move || {
+                            if let Some(b2) = btn_w2.upgrade() {
+                                b2.set_label("Redémarrer le service");
+                                b2.remove_css_class("error");
+                            }
+                        },
+                    );
+                }
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                gtk4::glib::timeout_add_local_once(
+                    std::time::Duration::from_millis(200),
+                    move || poll_restart(rx, btn_weak),
+                );
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                if let Some(b) = btn_weak.upgrade() {
+                    b.set_label("✗ Échec");
+                    b.add_css_class("error");
+                    b.set_sensitive(true);
+                }
+            }
+        }
+    }
+    gtk4::glib::timeout_add_local_once(
+        std::time::Duration::from_millis(200),
+        move || poll_restart(rx, btn_weak),
+    );
+}
 
 /// Read the config.toml as a TOML table. Returns empty table on error.
 fn load_config() -> toml::Table {
-    let path = format!("{}{}", std::env::var("HOME").unwrap_or_default(), CONFIG_PATH);
-    std::fs::read_to_string(&path)
+    std::fs::read_to_string(config_path())
         .ok()
         .and_then(|s| s.parse::<toml::Table>().ok())
         .unwrap_or_default()
@@ -42,18 +110,41 @@ fn load_config() -> toml::Table {
 /// If the key exists (commented or not), replace/uncomment it.
 /// If the key doesn't exist, append it after the section header.
 /// If the section doesn't exist, append both section and key at the end.
-fn save_config_value(section: &str, key: &str, value: &str) {
-    let path = format!("{}{}", std::env::var("HOME").unwrap_or_default(), CONFIG_PATH);
+fn save_config_value(section: &str, key: &str, value: &str) -> bool {
+    let path = config_path();
 
     let content = match std::fs::read_to_string(&path) {
         Ok(c) => c,
         Err(e) => {
             tracing::error!("Failed to read config: {}", e);
-            return;
+            return false;
         }
     };
 
-    // Format the TOML value string
+    let final_content = edit_toml_content(&content, section, key, value);
+
+    // Use atomic write via temp file to avoid race conditions
+    let tmp_path = format!("{}.tmp", path);
+    if let Err(e) = std::fs::write(&tmp_path, &final_content) {
+        tracing::error!("Failed to write config: {}", e);
+        let _ = std::fs::remove_file(&tmp_path);
+        return false;
+    }
+    if let Err(e) = std::fs::rename(&tmp_path, &path) {
+        tracing::error!("Failed to rename config: {}", e);
+        let _ = std::fs::remove_file(&tmp_path);
+        return false;
+    }
+    let toml_value = format_toml_value(value);
+    tracing::info!("Config updated: [{}].{} = {}", section, key, toml_value);
+    true
+}
+
+/// Pure function: edit TOML content to set `[section].key = value`.
+///
+/// Preserves comments, blank lines, and file structure.
+/// Returns the new file content string.
+fn edit_toml_content(content: &str, section: &str, key: &str, value: &str) -> String {
     let toml_value = format_toml_value(value);
     let new_line = format!("{} = {}", key, toml_value);
 
@@ -62,11 +153,6 @@ fn save_config_value(section: &str, key: &str, value: &str) {
 
     // Find section boundaries
     let section_header = format!("[{}]", section);
-    let mut in_target_section = false;
-    let mut key_replaced = false;
-    let mut section_found = false;
-    // Track where the section content ends (before next section or EOF)
-    let mut section_last_content_idx: Option<usize> = None;
 
     // First pass: find if section and key exist
     let mut section_start: Option<usize> = None;
@@ -139,16 +225,10 @@ fn save_config_value(section: &str, key: &str, value: &str) {
 
     let new_content = result.join("\n");
     // Preserve trailing newline
-    let final_content = if content.ends_with('\n') && !new_content.ends_with('\n') {
+    if content.ends_with('\n') && !new_content.ends_with('\n') {
         format!("{}\n", new_content)
     } else {
         new_content
-    };
-
-    if let Err(e) = std::fs::write(&path, &final_content) {
-        tracing::error!("Failed to write config: {}", e);
-    } else {
-        tracing::info!("Config updated: [{}].{} = {}", section, key, toml_value);
     }
 }
 
@@ -252,50 +332,79 @@ fn build_state_page() -> adw::PreferencesPage {
 
     page.add(&group);
 
-    // Status monitoring timer (updates every 500ms)
-    let state_row_clone = state_row.clone();
-    let state_icon_clone = state_icon.clone();
-    let start_button_clone = start_button.clone();
-    let model_row_clone = model_row.clone();
-    let device_row_clone = device_row.clone();
-    let backend_row_clone = backend_row.clone();
+    // Status monitoring timer (updates every 2s to avoid excessive fork+exec)
+    // Uses WeakRef so the timer stops automatically when the page is destroyed
+    let state_row_weak = state_row.downgrade();
+    let state_icon_weak = state_icon.downgrade();
+    let start_button_weak = start_button.downgrade();
+    let model_row_weak = model_row.downgrade();
+    let device_row_weak = device_row.downgrade();
+    let backend_row_weak = backend_row.downgrade();
 
-    gtk4::glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
-        if let Ok(output) = Command::new("voxtype")
-            .args(["status", "--format", "json", "--extended"])
-            .output()
-        {
-            if let Ok(json_str) = String::from_utf8(output.stdout) {
+    gtk4::glib::timeout_add_local(std::time::Duration::from_millis(2000), move || {
+        // Stop the timer if any widget has been destroyed (window closed)
+        let Some(state_row_ref) = state_row_weak.upgrade() else {
+            return gtk4::glib::ControlFlow::Break;
+        };
+        let Some(state_icon_ref) = state_icon_weak.upgrade() else {
+            return gtk4::glib::ControlFlow::Break;
+        };
+        let Some(start_button_ref) = start_button_weak.upgrade() else {
+            return gtk4::glib::ControlFlow::Break;
+        };
+
+        // Run status check in a thread to avoid blocking GTK main loop
+        let (tx, rx) = std::sync::mpsc::channel::<String>();
+        std::thread::spawn(move || {
+            if let Ok(output) = Command::new("voxtype")
+                .args(["status", "--format", "json", "--extended"])
+                .output()
+            {
+                if let Ok(s) = String::from_utf8(output.stdout) {
+                    let _ = tx.send(s);
+                }
+            }
+        });
+
+        // Poll result after a short delay (non-blocking)
+        let model_w = model_row_weak.clone();
+        let device_w = device_row_weak.clone();
+        let backend_w = backend_row_weak.clone();
+        let sr = state_row_ref.clone();
+        let si = state_icon_ref.clone();
+        let sb = start_button_ref.clone();
+        gtk4::glib::timeout_add_local_once(std::time::Duration::from_millis(200), move || {
+            if let Ok(json_str) = rx.try_recv() {
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_str.trim()) {
-                    let class = json
-                        .get("class")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("stopped");
-
+                    let class = json.get("class").and_then(|v| v.as_str()).unwrap_or("stopped");
                     let (label, icon, show_start) = match class {
                         "idle" => ("Prêt", "emblem-ok-symbolic", false),
                         "recording" => ("Enregistrement", "media-record-symbolic", false),
                         "transcribing" => ("Transcription…", "view-refresh-symbolic", false),
                         _ => ("Daemon inactif", "dialog-error-symbolic", true),
                     };
-
-                    state_row_clone.set_subtitle(label);
-                    state_icon_clone.set_icon_name(Some(icon));
-                    start_button_clone.set_visible(show_start);
-
-                    // Extended fields
-                    if let Some(model) = json.get("model").and_then(|v| v.as_str()) {
-                        model_row_clone.set_subtitle(model);
+                    sr.set_subtitle(label);
+                    si.set_icon_name(Some(icon));
+                    sb.set_visible(show_start);
+                    if let Some(m) = model_w.upgrade() {
+                        if let Some(model) = json.get("model").and_then(|v| v.as_str()) {
+                            m.set_subtitle(model);
+                        }
                     }
-                    if let Some(device) = json.get("device").and_then(|v| v.as_str()) {
-                        device_row_clone.set_subtitle(device);
+                    if let Some(d) = device_w.upgrade() {
+                        if let Some(device) = json.get("device").and_then(|v| v.as_str()) {
+                            d.set_subtitle(device);
+                        }
                     }
-                    if let Some(backend) = json.get("backend").and_then(|v| v.as_str()) {
-                        backend_row_clone.set_subtitle(backend);
+                    if let Some(b) = backend_w.upgrade() {
+                        if let Some(backend) = json.get("backend").and_then(|v| v.as_str()) {
+                            b.set_subtitle(backend);
+                        }
                     }
                 }
             }
-        }
+        });
+
         gtk4::glib::ControlFlow::Continue
     });
 
@@ -355,8 +464,8 @@ fn build_audio_page() -> adw::PreferencesPage {
         .title("Durée max (secondes)")
         .adjustment(&gtk4::Adjustment::new(current_duration, 5.0, 300.0, 5.0, 10.0, 0.0))
         .build();
-    duration_row.connect_changed(|row| {
-        let val = row.value() as i64;
+    duration_row.adjustment().connect_value_changed(|adj| {
+        let val = adj.value() as i64;
         save_config_value("audio", "max_duration_secs", &val.to_string());
     });
     group.add(&duration_row);
@@ -396,10 +505,8 @@ fn build_audio_page() -> adw::PreferencesPage {
         .css_classes(["suggested-action"])
         .halign(gtk4::Align::Center)
         .build();
-    restart_btn.connect_clicked(|_| {
-        let _ = Command::new("systemctl")
-            .args(["--user", "restart", "voxtype"])
-            .spawn();
+    restart_btn.connect_clicked(|btn| {
+        restart_service_button(btn);
     });
     notice.add(&restart_btn);
     page.add(&notice);
@@ -506,10 +613,8 @@ fn build_transcription_page() -> adw::PreferencesPage {
         .css_classes(["suggested-action"])
         .halign(gtk4::Align::Center)
         .build();
-    restart_btn.connect_clicked(|_| {
-        let _ = Command::new("systemctl")
-            .args(["--user", "restart", "voxtype"])
-            .spawn();
+    restart_btn.connect_clicked(|btn| {
+        restart_service_button(btn);
     });
     notice.add(&restart_btn);
     page.add(&notice);
@@ -743,16 +848,6 @@ fn build_diagnostic_page() -> adw::PreferencesPage {
 // Story 6.1/6.2: Notification de mise à jour (refactored)
 // ==========================================================================
 
-fn build_update_banner() -> adw::Banner {
-    // Kept for potential future use, but no longer inserted into the window layout
-    let banner = adw::Banner::builder()
-        .title("Vérification des mises à jour…")
-        .revealed(false)
-        .build();
-    banner.set_button_label(Some("Voir le changelog"));
-    banner
-}
-
 /// Check for updates and show a toast in the AdwPreferencesWindow.
 ///
 /// Uses AdwToast which is natively supported by AdwPreferencesWindow,
@@ -820,4 +915,153 @@ fn check_for_updates_toast(window: &adw::PreferencesWindow) {
         }
         poll_result(rx, window_weak);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =================================================================
+    // format_toml_value
+    // =================================================================
+
+    #[test]
+    fn format_toml_value_bool() {
+        assert_eq!(format_toml_value("true"), "true");
+        assert_eq!(format_toml_value("false"), "false");
+    }
+
+    #[test]
+    fn format_toml_value_integer() {
+        assert_eq!(format_toml_value("42"), "42");
+        assert_eq!(format_toml_value("0"), "0");
+        assert_eq!(format_toml_value("-1"), "-1");
+    }
+
+    #[test]
+    fn format_toml_value_float() {
+        assert_eq!(format_toml_value("3.14"), "3.14");
+    }
+
+    #[test]
+    fn format_toml_value_string() {
+        assert_eq!(format_toml_value("hello"), "\"hello\"");
+        assert_eq!(format_toml_value("with spaces"), "\"with spaces\"");
+    }
+
+    #[test]
+    fn format_toml_value_string_escapes() {
+        assert_eq!(format_toml_value(r#"say "hi""#), r#""say \"hi\"""#);
+        assert_eq!(format_toml_value(r"back\slash"), r#""back\\slash""#);
+    }
+
+    // =================================================================
+    // edit_toml_content — replace existing key
+    // =================================================================
+
+    #[test]
+    fn edit_toml_replace_existing_key() {
+        let input = "[audio]\ndevice = \"default\"\nmax_duration_secs = 30\n";
+        let result = edit_toml_content(input, "audio", "device", "hw:1");
+        assert!(result.contains("device = \"hw:1\""));
+        assert!(result.contains("max_duration_secs = 30"));
+    }
+
+    #[test]
+    fn edit_toml_replace_bool() {
+        let input = "[hotkey]\nenabled = true\n";
+        let result = edit_toml_content(input, "hotkey", "enabled", "false");
+        assert!(result.contains("enabled = false"));
+    }
+
+    // =================================================================
+    // edit_toml_content — uncomment commented key
+    // =================================================================
+
+    #[test]
+    fn edit_toml_uncomment_key() {
+        let input = "[whisper]\n# model = \"base\"\n";
+        let result = edit_toml_content(input, "whisper", "model", "large-v3");
+        assert!(result.contains("model = \"large-v3\""));
+        assert!(!result.contains('#'));
+    }
+
+    // =================================================================
+    // edit_toml_content — add key to existing section
+    // =================================================================
+
+    #[test]
+    fn edit_toml_add_key_to_section() {
+        let input = "[audio]\ndevice = \"default\"\n";
+        let result = edit_toml_content(input, "audio", "max_duration_secs", "60");
+        assert!(result.contains("max_duration_secs = 60"));
+        assert!(result.contains("device = \"default\""));
+    }
+
+    // =================================================================
+    // edit_toml_content — create new section
+    // =================================================================
+
+    #[test]
+    fn edit_toml_create_new_section() {
+        let input = "[audio]\ndevice = \"default\"\n";
+        let result = edit_toml_content(input, "hotkey", "enabled", "true");
+        assert!(result.contains("[hotkey]"));
+        assert!(result.contains("enabled = true"));
+        // Original content preserved
+        assert!(result.contains("[audio]"));
+        assert!(result.contains("device = \"default\""));
+    }
+
+    #[test]
+    fn edit_toml_create_section_on_empty() {
+        let result = edit_toml_content("", "whisper", "model", "base");
+        assert!(result.contains("[whisper]"));
+        assert!(result.contains("model = \"base\""));
+    }
+
+    // =================================================================
+    // edit_toml_content — preserves trailing newline
+    // =================================================================
+
+    #[test]
+    fn edit_toml_preserves_trailing_newline() {
+        let input = "[audio]\ndevice = \"default\"\n";
+        let result = edit_toml_content(input, "audio", "device", "hw:1");
+        assert!(result.ends_with('\n'));
+    }
+
+    // =================================================================
+    // edit_toml_content — multi-section file
+    // =================================================================
+
+    #[test]
+    fn edit_toml_multi_section() {
+        let input = "\
+[audio]
+device = \"default\"
+
+[whisper]
+model = \"base\"
+
+[hotkey]
+enabled = true
+";
+        let result = edit_toml_content(input, "whisper", "model", "large-v3");
+        assert!(result.contains("model = \"large-v3\""));
+        // Other sections untouched
+        assert!(result.contains("device = \"default\""));
+        assert!(result.contains("enabled = true"));
+    }
+
+    // =================================================================
+    // edit_toml_content — dotted section (e.g. [audio.feedback])
+    // =================================================================
+
+    #[test]
+    fn edit_toml_dotted_section() {
+        let input = "[audio.feedback]\nenabled = true\n";
+        let result = edit_toml_content(input, "audio.feedback", "enabled", "false");
+        assert!(result.contains("enabled = false"));
+    }
 }
