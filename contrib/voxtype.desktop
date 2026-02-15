@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Voxtype
+GenericName=Voice to Text
+Comment=Push-to-talk voice-to-text for Linux
+Exec=voxtype ui
+Icon=voxtype
+Terminal=false
+Categories=Utility;Accessibility;Audio;
+Keywords=voice;speech;dictation;transcription;whisper;
+StartupNotify=true
+StartupWMClass=io.github.voxtype.Voxtype
+X-GNOME-UsesNotifications=true
+Actions=settings;
+
+[Desktop Action settings]
+Name=Réglages
+Exec=voxtype ui --settings

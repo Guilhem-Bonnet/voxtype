@@ -107,8 +107,9 @@ With `--extended`, the JSON output includes additional fields:
 ```json
 {
   "text": "🎙️",
+  "alt": "idle",
   "class": "idle",
-  "tooltip": "Voxtype ready\nModel: base.en\nDevice: default\nBackend: CPU (AVX-512)",
+  "tooltip": "Voxtype ready - hold hotkey to record\nModel: base.en\nDevice: default\nBackend: CPU (AVX-512)",
   "model": "base.en",
   "device": "default",
   "backend": "CPU (AVX-512)"
@@ -316,7 +317,7 @@ The `--follow` flag keeps a persistent connection and updates instantly. If you 
    ```bash
    voxtype status --format json
    ```
-   Should output JSON like `{"text":"🎙️","tooltip":"Voxtype: idle","class":"idle"}`.
+   Should output JSON like `{"text":"🎙️","alt":"idle","class":"idle","tooltip":"Voxtype ready - hold hotkey to record"}`.
 
 ### Module shows error or wrong icon
 
@@ -372,3 +373,56 @@ Here's a complete Waybar config snippet:
 
 - [Configuration Reference](CONFIGURATION.md#state_file) - Full `state_file` documentation
 - [User Manual](USER_MANUAL.md#with-waybar-status-indicator) - Integration examples
+
+## Recording Overlay Window Rules (voxtype ui)
+
+When using `voxtype ui --features gui`, the recording overlay is a small floating window.
+On Wayland, compositor window rules ensure the overlay:
+- Stays floating (not tiled)
+- Stays on top of other windows
+- Has no taskbar entry
+
+### Hyprland
+
+Add to `~/.config/hypr/hyprland.conf`:
+
+```ini
+windowrulev2 = float, title:^(Voxtype Recording)$
+windowrulev2 = pin, title:^(Voxtype Recording)$
+windowrulev2 = noborder, title:^(Voxtype Recording)$
+windowrulev2 = noshadow, title:^(Voxtype Recording)$
+windowrulev2 = nofocus, title:^(Voxtype Recording)$
+windowrulev2 = move 50% 90%, title:^(Voxtype Recording)$
+windowrulev2 = size 280 56, title:^(Voxtype Recording)$
+```
+
+### Sway
+
+Add to `~/.config/sway/config`:
+
+```
+for_window [title="Voxtype Recording"] {
+    floating enable
+    sticky enable
+    border none
+    no_focus
+    move position center
+    move down 400
+}
+```
+
+### River
+
+```sh
+riverctl rule-add -title "Voxtype Recording" float
+```
+
+### GNOME (Mutter)
+
+No additional configuration needed. The GTK4 window type hints are respected natively.
+
+### KDE (KWin)
+
+No additional configuration needed. `keep_above` and window type hints work natively.
+You can optionally add a KWin rule via System Settings > Window Management > Window Rules
+to pin the overlay.
