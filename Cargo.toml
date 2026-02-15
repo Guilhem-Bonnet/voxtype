@@ -79,6 +79,13 @@ notify = "6"
 # Single instance check
 pidlock = "0.1"
 
+# GUI toolkit (optional, behind feature flag "gui")
+gtk4 = { version = "0.9", optional = true }
+libadwaita = { version = "0.7", optional = true, features = ["v1_4"] }
+
+# System tray (optional, behind feature flag "gui")
+ksni = { version = "0.3", optional = true }
+
 [features]
 default = []
 gpu-vulkan = ["whisper-rs/vulkan"]
@@ -92,6 +99,8 @@ parakeet-tensorrt = ["parakeet", "parakeet-rs/tensorrt"]
 parakeet-rocm = ["parakeet", "parakeet-rs/rocm"]
 # Dynamic loading for system ONNX Runtime (used by Nix builds)
 parakeet-load-dynamic = ["parakeet", "parakeet-rs/load-dynamic"]
+# GUI (GTK4 + libadwaita overlay/tray/settings)
+gui = ["dep:gtk4", "dep:libadwaita", "dep:ksni"]
 
 [build-dependencies]
 clap = { version = "4", features = ["derive"] }

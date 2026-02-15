@@ -9,6 +9,7 @@
 use super::AudioCapture;
 use crate::config::AudioConfig;
 use crate::error::AudioError;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::sync::{mpsc, oneshot};
@@ -25,6 +26,8 @@ struct StreamBuildParams {
     source_rate: u32,
     target_rate: u32,
     source_channels: usize,
+    /// Shared atomic for real-time audio level (RMS, 0.0–1.0), stored as f32 bits
+    audio_level: Arc<AtomicU32>,
 }
 
 /// cpal-based audio capture implementation
@@ -35,6 +38,8 @@ pub struct CpalCapture {
     cmd_tx: Option<std::sync::mpsc::Sender<CaptureCommand>>,
     /// Handle to the capture thread
     thread_handle: Option<thread::JoinHandle<()>>,
+    /// Current audio level (RMS, 0.0–1.0), updated by the audio callback
+    audio_level: Arc<AtomicU32>,
 }
 
 impl CpalCapture {
@@ -44,7 +49,16 @@ impl CpalCapture {
             config: config.clone(),
             cmd_tx: None,
             thread_handle: None,
+            audio_level: Arc::new(AtomicU32::new(0_f32.to_bits())),
         })
+    }
+
+    /// Get the current audio level (RMS, 0.0–1.0).
+    ///
+    /// Updated in real-time by the audio capture callback.
+    /// Returns 0.0 when not recording.
+    pub fn current_level(&self) -> f32 {
+        f32::from_bits(self.audio_level.load(Ordering::Relaxed))
     }
 }
 
@@ -186,6 +200,7 @@ impl AudioCapture for CpalCapture {
         // Shared state
         let samples = Arc::new(Mutex::new(Vec::<f32>::new()));
         let samples_clone = samples.clone();
+        let audio_level_clone = self.audio_level.clone();
 
         // Spawn audio capture thread
         let thread_handle = thread::spawn(move || {
@@ -205,6 +220,7 @@ impl AudioCapture for CpalCapture {
                 source_rate: source_sample_rate,
                 target_rate: target_sample_rate,
                 source_channels,
+                audio_level: audio_level_clone.clone(),
             };
 
             let stream_result = match sample_format {
@@ -299,7 +315,15 @@ impl AudioCapture for CpalCapture {
             return Err(AudioError::EmptyRecording);
         }
 
+        // Reset audio level to 0 now that recording stopped
+        self.audio_level
+            .store(0_f32.to_bits(), Ordering::Relaxed);
+
         Ok(samples)
+    }
+
+    fn current_level(&self) -> f32 {
+        self.current_level()
     }
 }
 
@@ -322,6 +346,7 @@ where
         source_rate,
         target_rate,
         source_channels,
+        audio_level,
     } = params;
 
     let stream = device
@@ -346,6 +371,15 @@ where
                 } else {
                     mono_f32
                 };
+
+                // Compute RMS audio level (0.0–1.0) and store atomically
+                if !resampled.is_empty() {
+                    let rms = (resampled.iter().map(|s| s * s).sum::<f32>()
+                        / resampled.len() as f32)
+                        .sqrt()
+                        .min(1.0);
+                    audio_level.store(rms.to_bits(), Ordering::Relaxed);
+                }
 
                 // Store samples
                 if let Ok(mut guard) = samples.lock() {

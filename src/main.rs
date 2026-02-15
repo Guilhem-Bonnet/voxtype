@@ -290,6 +290,20 @@ async fn main() -> anyhow::Result<()> {
         Commands::Record { action } => {
             send_record_command(&config, action)?;
         }
+
+        Commands::Ui { settings } => {
+            #[cfg(feature = "gui")]
+            {
+                voxtype::gui::launch(settings)?;
+            }
+            #[cfg(not(feature = "gui"))]
+            {
+                let _ = settings; // suppress unused warning
+                eprintln!("GUI non disponible — recompilez avec : cargo build --features gui");
+                eprintln!("Prérequis : libgtk-4-dev libadwaita-1-dev");
+                std::process::exit(1);
+            }
+        }
     }
 
     Ok(())
@@ -515,6 +529,37 @@ fn resample(samples: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
     output
 }
 
+/// JSON output for Waybar consumption.
+///
+/// STABILITY: These field names MUST NOT change between minor versions (NFR2).
+/// The `text`, `alt`, `class`, and `tooltip` fields form the stable Waybar contract.
+/// Waybar expects these fields for its custom module JSON protocol.
+///
+/// - `text`: Display text (icon from theme)
+/// - `alt`: State name for Waybar `format-icons` mapping
+/// - `class`: State name for CSS styling (one of: `idle`, `recording`, `transcribing`, `stopped`)
+/// - `tooltip`: Human-readable status description
+/// - `level`: Audio RMS level (0.0–1.0), present only during `recording` state
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+struct WaybarStatus {
+    text: String,
+    alt: String,
+    class: String,
+    tooltip: String,
+    /// Audio RMS level (0.0–1.0), only present during recording state
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    level: Option<f32>,
+    /// Whisper model name (only present with `--extended`)
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    model: Option<String>,
+    /// Audio input device (only present with `--extended`)
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    device: Option<String>,
+    /// Transcription backend (only present with `--extended`)
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    backend: Option<String>,
+}
+
 /// Extended status info for JSON output
 struct ExtendedStatusInfo {
     model: String,
@@ -656,23 +701,39 @@ async fn run_status(
     }
 
     let mut last_state = state.to_string();
+    let mut last_level: Option<f32> = None;
 
     loop {
-        match rx.recv_timeout(Duration::from_millis(500)) {
+        // Use shorter timeout during recording to capture level updates at ~20fps
+        let timeout = if last_state == "recording" {
+            Duration::from_millis(50)
+        } else {
+            Duration::from_millis(500)
+        };
+
+        match rx.recv_timeout(timeout) {
             Ok(Ok(_event)) => {
-                // File changed, read new state
+                // File changed (state or level), read new state
                 if let Ok(new_state) = std::fs::read_to_string(&state_path) {
                     let new_state = new_state.trim().to_string();
-                    if new_state != last_state {
+                    let level = read_audio_level(&state_path);
+
+                    if new_state != last_state || level != last_level {
                         if format == "json" {
                             println!(
                                 "{}",
-                                format_state_json(&new_state, &icons, ext_info.as_ref())
+                                format_state_json_with_level(
+                                    &new_state,
+                                    &icons,
+                                    ext_info.as_ref(),
+                                    level
+                                )
                             );
                         } else {
                             println!("{}", new_state);
                         }
                         last_state = new_state;
+                        last_level = level;
                     }
                 }
             }
@@ -680,6 +741,23 @@ async fn run_status(
                 tracing::warn!("Watch error: {:?}", e);
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                // During recording, poll for level changes even without inotify events
+                if last_state == "recording" && format == "json" {
+                    let level = read_audio_level(&state_path);
+                    if level != last_level {
+                        println!(
+                            "{}",
+                            format_state_json_with_level(
+                                &last_state,
+                                &icons,
+                                ext_info.as_ref(),
+                                level
+                            )
+                        );
+                        last_level = level;
+                    }
+                }
+
                 // Check if daemon stopped (file deleted or process died)
                 if (!state_path.exists() || !is_daemon_running()) && last_state != "stopped" {
                     if format == "json" {
@@ -691,6 +769,7 @@ async fn run_status(
                         println!("stopped");
                     }
                     last_state = "stopped".to_string();
+                    last_level = None;
                 }
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
@@ -702,12 +781,44 @@ async fn run_status(
     Ok(())
 }
 
-/// Format state as JSON for Waybar consumption
-/// The `alt` field enables Waybar's format-icons feature for custom icon mapping
+/// Read the current audio level from the level file (sibling of state file).
+///
+/// Returns `Some(level)` if the file exists and contains a valid float,
+/// `None` otherwise (e.g., not recording, file missing).
+fn read_audio_level(state_path: &std::path::Path) -> Option<f32> {
+    let level_path = state_path.with_file_name("audio_level");
+    std::fs::read_to_string(&level_path)
+        .ok()
+        .and_then(|s| s.trim().parse::<f32>().ok())
+        .filter(|&l| l >= 0.0 && l <= 1.0)
+}
+
+/// Format state as JSON for Waybar consumption.
+///
+/// Builds a [`WaybarStatus`] and serializes it via `serde_json`.
+/// This ensures valid JSON regardless of special characters in field values.
+///
+/// The `alt` field enables Waybar's `format-icons` feature for custom icon mapping.
+///
+/// STABILITY: The field names (`text`, `alt`, `class`, `tooltip`) MUST NOT change
+/// between minor versions (NFR2 — rétrocompatibilité).
 fn format_state_json(
     state: &str,
     icons: &config::ResolvedIcons,
     extended: Option<&ExtendedStatusInfo>,
+) -> String {
+    format_state_json_with_level(state, icons, extended, None)
+}
+
+/// Format state as JSON with an optional audio level for recording state.
+///
+/// The `level` parameter is the RMS audio level (0.0–1.0) from the audio capture,
+/// included only when state is "recording" and level is Some.
+fn format_state_json_with_level(
+    state: &str,
+    icons: &config::ResolvedIcons,
+    extended: Option<&ExtendedStatusInfo>,
+    level: Option<f32>,
 ) -> String {
     let (text, base_tooltip) = match state {
         "recording" => (&icons.recording, "Recording..."),
@@ -717,30 +828,46 @@ fn format_state_json(
         _ => (&icons.idle, "Unknown state"),
     };
 
-    // alt = state name (for Waybar format-icons mapping)
-    // class = state name (for CSS styling)
-    let alt = state;
-    let class = state;
+    // Only include level during recording state
+    let effective_level = if state == "recording" { level } else { None };
 
-    match extended {
+    let status = match extended {
         Some(info) => {
-            // Extended format includes model, device, backend
             let tooltip = format!(
-                "{}\\nModel: {}\\nDevice: {}\\nBackend: {}",
+                "{}\nModel: {}\nDevice: {}\nBackend: {}",
                 base_tooltip, info.model, info.device, info.backend
             );
-            format!(
-                r#"{{"text": "{}", "alt": "{}", "class": "{}", "tooltip": "{}", "model": "{}", "device": "{}", "backend": "{}"}}"#,
-                text, alt, class, tooltip, info.model, info.device, info.backend
-            )
+            WaybarStatus {
+                text: text.clone(),
+                alt: state.to_string(),
+                class: state.to_string(),
+                tooltip,
+                level: effective_level,
+                model: Some(info.model.clone()),
+                device: Some(info.device.clone()),
+                backend: Some(info.backend.clone()),
+            }
         }
-        None => {
-            format!(
-                r#"{{"text": "{}", "alt": "{}", "class": "{}", "tooltip": "{}"}}"#,
-                text, alt, class, base_tooltip
-            )
-        }
-    }
+        None => WaybarStatus {
+            text: text.clone(),
+            alt: state.to_string(),
+            class: state.to_string(),
+            tooltip: base_tooltip.to_string(),
+            level: effective_level,
+            model: None,
+            device: None,
+            backend: None,
+        },
+    };
+
+    // serde_json::to_string cannot fail for this struct (all fields are String/Option<String>),
+    // but we provide a safe fallback rather than panicking in production.
+    serde_json::to_string(&status).unwrap_or_else(|_| {
+        format!(
+            r#"{{"text":"","alt":"{}","class":"{}","tooltip":"Serialization error"}}"#,
+            state, state
+        )
+    })
 }
 
 /// Show current configuration
@@ -891,4 +1018,325 @@ fn reset_sigpipe() {
 #[cfg(not(unix))]
 fn reset_sigpipe() {
     // No-op on non-Unix platforms
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper: create default test icons (emoji theme)
+    fn test_icons() -> config::ResolvedIcons {
+        config::ResolvedIcons {
+            idle: "🎙️".to_string(),
+            recording: "🎤".to_string(),
+            transcribing: "⏳".to_string(),
+            stopped: "".to_string(),
+        }
+    }
+
+    // ===== Task 1.1: 4 standard fields always present =====
+
+    #[test]
+    fn test_json_idle_has_four_standard_fields() {
+        let icons = test_icons();
+        let json = format_state_json("idle", &icons, None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert!(parsed["text"].is_string(), "text field missing");
+        assert!(parsed["alt"].is_string(), "alt field missing");
+        assert!(parsed["class"].is_string(), "class field missing");
+        assert!(parsed["tooltip"].is_string(), "tooltip field missing");
+    }
+
+    #[test]
+    fn test_json_recording_has_four_standard_fields() {
+        let icons = test_icons();
+        let json = format_state_json("recording", &icons, None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(parsed["class"], "recording");
+        assert_eq!(parsed["alt"], "recording");
+        assert!(parsed["text"].is_string());
+        assert!(parsed["tooltip"].is_string());
+    }
+
+    #[test]
+    fn test_json_transcribing_has_four_standard_fields() {
+        let icons = test_icons();
+        let json = format_state_json("transcribing", &icons, None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(parsed["class"], "transcribing");
+        assert_eq!(parsed["alt"], "transcribing");
+    }
+
+    #[test]
+    fn test_json_stopped_has_four_standard_fields() {
+        let icons = test_icons();
+        let json = format_state_json("stopped", &icons, None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(parsed["class"], "stopped");
+        assert_eq!(parsed["tooltip"], "Voxtype not running");
+    }
+
+    // ===== Task 1.2: Extended fields only with --extended =====
+
+    #[test]
+    fn test_json_no_extended_fields_without_flag() {
+        let icons = test_icons();
+        let json = format_state_json("idle", &icons, None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert!(parsed.get("model").is_none(), "model should be absent without --extended");
+        assert!(parsed.get("device").is_none(), "device should be absent without --extended");
+        assert!(parsed.get("backend").is_none(), "backend should be absent without --extended");
+    }
+
+    #[test]
+    fn test_json_extended_fields_present_with_flag() {
+        let icons = test_icons();
+        let ext = ExtendedStatusInfo {
+            model: "base".to_string(),
+            device: "default".to_string(),
+            backend: "CPU (native)".to_string(),
+        };
+        let json = format_state_json("idle", &icons, Some(&ext));
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(parsed["model"], "base");
+        assert_eq!(parsed["device"], "default");
+        assert_eq!(parsed["backend"], "CPU (native)");
+    }
+
+    #[test]
+    fn test_json_extended_tooltip_includes_extra_info() {
+        let icons = test_icons();
+        let ext = ExtendedStatusInfo {
+            model: "large-v3".to_string(),
+            device: "pulse".to_string(),
+            backend: "GPU (Vulkan)".to_string(),
+        };
+        let json = format_state_json("idle", &icons, Some(&ext));
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let tooltip = parsed["tooltip"].as_str().unwrap();
+        assert!(tooltip.contains("Model: large-v3"), "tooltip should include model");
+        assert!(tooltip.contains("Device: pulse"), "tooltip should include device");
+        assert!(tooltip.contains("Backend: GPU (Vulkan)"), "tooltip should include backend");
+    }
+
+    // ===== Task 1.3: Stopped state =====
+
+    #[test]
+    fn test_json_stopped_state_class() {
+        let icons = test_icons();
+        let json = format_state_json("stopped", &icons, None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(parsed["class"], "stopped");
+        assert_eq!(parsed["alt"], "stopped");
+    }
+
+    // ===== Task 1.4: Special characters produce valid JSON =====
+
+    #[test]
+    fn test_json_special_chars_in_model_name() {
+        let icons = test_icons();
+        let ext = ExtendedStatusInfo {
+            model: r#"model "with" quotes & backslash \"#.to_string(),
+            device: "device/with/slashes".to_string(),
+            backend: "backend<with>angles".to_string(),
+        };
+        let json = format_state_json("idle", &icons, Some(&ext));
+        // Must be parseable as valid JSON despite special characters
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("JSON with special chars must be valid");
+        assert!(parsed["model"].as_str().unwrap().contains("quotes"));
+    }
+
+    #[test]
+    fn test_json_unicode_in_icon_text() {
+        let icons = config::ResolvedIcons {
+            idle: "🎙️ prêt".to_string(),
+            recording: "🎤".to_string(),
+            transcribing: "⏳".to_string(),
+            stopped: "⛔".to_string(),
+        };
+        let json = format_state_json("idle", &icons, None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("JSON with unicode must be valid");
+        assert!(parsed["text"].as_str().unwrap().contains("prêt"));
+    }
+
+    // ===== Task 2.5: Gold test — verify output structure =====
+
+    #[test]
+    fn test_json_class_values_are_state_names() {
+        let icons = test_icons();
+        for state in &["idle", "recording", "transcribing", "stopped"] {
+            let json = format_state_json(state, &icons, None);
+            let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+            assert_eq!(parsed["class"].as_str().unwrap(), *state,
+                "class field should equal the state name for state '{}'", state);
+            assert_eq!(parsed["alt"].as_str().unwrap(), *state,
+                "alt field should equal the state name for state '{}'", state);
+        }
+    }
+
+    #[test]
+    fn test_json_unknown_state_falls_back_to_idle_icon() {
+        let icons = test_icons();
+        let json = format_state_json("outputting", &icons, None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        // Unknown states use idle icon
+        assert_eq!(parsed["text"].as_str().unwrap(), icons.idle);
+        assert_eq!(parsed["tooltip"], "Unknown state");
+        // But class/alt reflect the actual state string
+        assert_eq!(parsed["class"], "outputting");
+    }
+
+    #[test]
+    fn test_waybar_status_struct_serialization_roundtrip() {
+        let status = WaybarStatus {
+            text: "🎙️".to_string(),
+            alt: "idle".to_string(),
+            class: "idle".to_string(),
+            tooltip: "Ready".to_string(),
+            level: None,
+            model: None,
+            device: None,
+            backend: None,
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        // Optional fields should be absent when None
+        assert!(parsed.get("model").is_none());
+        assert!(parsed.get("device").is_none());
+        assert!(parsed.get("backend").is_none());
+        // Required fields present
+        assert_eq!(parsed["text"], "🎙️");
+        assert_eq!(parsed["alt"], "idle");
+        assert_eq!(parsed["class"], "idle");
+        assert_eq!(parsed["tooltip"], "Ready");
+    }
+
+    // ===== M3: Missing edge case tests =====
+
+    #[test]
+    fn test_json_unknown_state_with_extended() {
+        let icons = test_icons();
+        let ext = ExtendedStatusInfo {
+            model: "base".to_string(),
+            device: "default".to_string(),
+            backend: "CPU (native)".to_string(),
+        };
+        let json = format_state_json("outputting", &icons, Some(&ext));
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        // Unknown state uses idle icon even with extended
+        assert_eq!(parsed["text"].as_str().unwrap(), icons.idle);
+        assert_eq!(parsed["class"], "outputting");
+        assert_eq!(parsed["model"], "base");
+    }
+
+    #[test]
+    fn test_json_empty_icon_strings() {
+        let icons = config::ResolvedIcons {
+            idle: "".to_string(),
+            recording: "".to_string(),
+            transcribing: "".to_string(),
+            stopped: "".to_string(),
+        };
+        let json = format_state_json("idle", &icons, None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON even with empty icons");
+        assert_eq!(parsed["text"], "");
+        assert_eq!(parsed["class"], "idle");
+    }
+
+    #[test]
+    fn test_json_field_order_stability() {
+        let icons = test_icons();
+        let json = format_state_json("idle", &icons, None);
+        // serde_json preserves struct field declaration order
+        // Verify the order is: text, alt, class, tooltip
+        let fields: Vec<&str> = json
+            .trim_start_matches('{')
+            .trim_end_matches('}')
+            .split(',')
+            .filter_map(|pair| pair.split(':').next())
+            .map(|key| key.trim().trim_matches('"'))
+            .collect();
+        assert_eq!(fields, vec!["text", "alt", "class", "tooltip"],
+            "Field order must be stable: text, alt, class, tooltip");
+    }
+
+    // ===== L2: Deserialize roundtrip test =====
+
+    #[test]
+    fn test_waybar_status_deserialize_roundtrip() {
+        let original = WaybarStatus {
+            text: "🎤".to_string(),
+            alt: "recording".to_string(),
+            class: "recording".to_string(),
+            tooltip: "Recording...".to_string(),
+            level: None,
+            model: Some("large-v3".to_string()),
+            device: Some("pulse".to_string()),
+            backend: Some("GPU (Vulkan)".to_string()),
+        };
+        let json = serde_json::to_string(&original).unwrap();
+        let deserialized: WaybarStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
+    fn test_waybar_status_deserialize_without_optional_fields() {
+        // Simulate what Waybar or an external consumer sees (no extended fields)
+        let json = r#"{"text":"🎙️","alt":"idle","class":"idle","tooltip":"Ready"}"#;
+        let status: WaybarStatus = serde_json::from_str(json).unwrap();
+        assert_eq!(status.text, "🎙️");
+        assert_eq!(status.level, None);
+        assert_eq!(status.model, None);
+        assert_eq!(status.device, None);
+        assert_eq!(status.backend, None);
+    }
+
+    // ===== Story 2.3: Level field tests =====
+
+    #[test]
+    fn test_json_level_present_during_recording() {
+        let icons = test_icons();
+        let json = format_state_json_with_level("recording", &icons, None, Some(0.42));
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let level = parsed["level"].as_f64().expect("level should be a number");
+        assert!((level - 0.42).abs() < 0.001, "level should be ~0.42");
+    }
+
+    #[test]
+    fn test_json_level_absent_during_idle() {
+        let icons = test_icons();
+        let json = format_state_json_with_level("idle", &icons, None, Some(0.42));
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert!(parsed.get("level").is_none(), "level should be absent during idle");
+    }
+
+    #[test]
+    fn test_json_level_absent_during_transcribing() {
+        let icons = test_icons();
+        let json = format_state_json_with_level("transcribing", &icons, None, Some(0.5));
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert!(parsed.get("level").is_none(), "level should be absent during transcribing");
+    }
+
+    #[test]
+    fn test_json_level_none_not_serialized() {
+        let icons = test_icons();
+        let json = format_state_json_with_level("recording", &icons, None, None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert!(parsed.get("level").is_none(), "level None should not be serialized");
+    }
+
+    #[test]
+    fn test_json_level_with_extended() {
+        let icons = test_icons();
+        let ext = ExtendedStatusInfo {
+            model: "base".to_string(),
+            device: "default".to_string(),
+            backend: "CPU (native)".to_string(),
+        };
+        let json = format_state_json_with_level("recording", &icons, Some(&ext), Some(0.75));
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert!(parsed["level"].as_f64().is_some(), "level should be present");
+        assert_eq!(parsed["model"], "base", "extended fields should still work");
+    }
 }

@@ -19,6 +19,11 @@ pub trait AudioCapture: Send + Sync {
 
     /// Stop capturing and return all recorded samples
     async fn stop(&mut self) -> Result<Vec<f32>, AudioError>;
+
+    /// Get the current audio level (RMS, 0.0–1.0).
+    /// Updated in real-time by the audio capture callback.
+    /// Returns 0.0 when not recording.
+    fn current_level(&self) -> f32;
 }
 
 /// Factory function to create audio capture

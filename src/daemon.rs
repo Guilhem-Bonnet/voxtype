@@ -67,6 +67,29 @@ fn cleanup_state_file(path: &PathBuf) {
             tracing::warn!("Failed to remove state file: {}", e);
         }
     }
+    // Also clean up the audio level file
+    let level_path = audio_level_path(path);
+    if level_path.exists() {
+        let _ = std::fs::remove_file(&level_path);
+    }
+}
+
+/// Get the path to the audio level file (sibling of state file)
+fn audio_level_path(state_path: &PathBuf) -> PathBuf {
+    state_path.with_file_name("audio_level")
+}
+
+/// Write audio level to a file for external integrations (GUI overlay waveform)
+fn write_audio_level(state_path: &PathBuf, level: f32) {
+    let path = audio_level_path(state_path);
+    // Write as a simple string "0.42\n" for easy parsing
+    let _ = std::fs::write(&path, format!("{:.3}", level.clamp(0.0, 1.0)));
+}
+
+/// Clean up the audio level file (called when leaving recording state)
+fn cleanup_audio_level(state_path: &PathBuf) {
+    let path = audio_level_path(state_path);
+    let _ = std::fs::remove_file(&path);
 }
 
 /// Write PID file for external control via signals
@@ -396,6 +419,10 @@ impl Daemon {
     fn update_state(&self, state_name: &str) {
         if let Some(ref path) = self.state_file_path {
             write_state_file(path, state_name);
+            // Clean up audio level file when leaving recording state
+            if state_name != "recording" {
+                cleanup_audio_level(path);
+            }
         }
     }
 
@@ -1184,8 +1211,14 @@ impl Daemon {
                     }
                 }
 
-                // Check for recording timeout and cancel requests
-                _ = tokio::time::sleep(Duration::from_millis(100)), if state.is_recording() => {
+                // Check for recording timeout, cancel requests, and update audio level
+                _ = tokio::time::sleep(Duration::from_millis(50)), if state.is_recording() => {
+                    // Write current audio level for GUI overlay waveform
+                    if let (Some(ref capture), Some(ref state_path)) = (&audio_capture, &self.state_file_path) {
+                        let level = capture.current_level();
+                        write_audio_level(state_path, level);
+                    }
+
                     // Check for cancel request first
                     if check_cancel_requested() {
                         tracing::info!("Recording cancelled");

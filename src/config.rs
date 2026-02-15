@@ -291,6 +291,31 @@ pub struct Config {
     /// Use with: `voxtype record start --profile slack`
     #[serde(default)]
     pub profiles: HashMap<String, Profile>,
+
+    /// Update checking configuration
+    /// Example: [update] check_enabled = false
+    #[serde(default)]
+    pub update: UpdateConfig,
+}
+
+/// Update checking configuration
+///
+/// Controls automatic version checking against GitHub releases.
+/// When enabled, the GUI checks for new versions at startup and every 24 hours.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UpdateConfig {
+    /// Whether to check for updates via GitHub API.
+    /// Set to false to disable all network calls for update checking.
+    #[serde(default = "default_true")]
+    pub check_enabled: bool,
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        Self {
+            check_enabled: true,
+        }
+    }
 }
 
 /// Hotkey detection configuration
@@ -1225,6 +1250,7 @@ impl Default for Config {
             status: StatusConfig::default(),
             state_file: Some("auto".to_string()),
             profiles: HashMap::new(),
+            update: UpdateConfig::default(),
         }
     }
 }

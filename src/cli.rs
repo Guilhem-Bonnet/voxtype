@@ -181,6 +181,13 @@ pub enum Commands {
         #[command(subcommand)]
         action: RecordAction,
     },
+
+    /// Launch the graphical user interface (requires --features gui)
+    Ui {
+        /// Open the settings window directly
+        #[arg(long)]
+        settings: bool,
+    },
 }
 
 /// Output mode override for record commands

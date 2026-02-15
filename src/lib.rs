@@ -74,6 +74,8 @@ pub mod config;
 pub mod cpu;
 pub mod daemon;
 pub mod error;
+#[cfg(feature = "gui")]
+pub mod gui;
 pub mod hotkey;
 pub mod model_manager;
 pub mod output;
